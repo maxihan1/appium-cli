@@ -177,3 +177,11 @@
 - **F6-06 스크롤 (실기기에서 본 것 · 짐작).** MDA products · 서랍(아래 products ScrollView) · cart · product screen 이 다 `ScrollView 스크롤` 을 가졌다. 어느 path 에도 `↓` 가 없다 — products 는 줄마다 `store item text` · `review star 1~5` 가 되풀이돼 밀어도 새 이름이 없고(F6-06 「같은 이름 한 번」 그대로), 서랍 12항목은 한 화면에 다 보인다. 밀었는지 · 끝에서 글이 가라앉았는지 · 시스템 제스처와 부딪혔는지는 로그가 없어 못 봤다. 서랍의 qr code scanner · geo location · reset app 은 눌렀지만(권한 창 = 다른 앱 → back / 창) 새 키가 없었다.
 - 테스트 153개(150 + 3: 서랍 허브 — back 이 바탕으로 가도 재시작 0 · 조상 화면에서 남은 path 만 · 지름길 어긋남 → 재시작 + `↓1` 경로). 기존 테스트 셋은 지름길로 바뀐 재시작 수 · 부름 차례를 고쳤다.
 - 폰: release 직후 `OCCUPIED(cleaning)`(팜 정리 중 — 놓기는 됐다). 이 기록을 쓸 때는 팜(127.0.0.1:4723)이 안 떠 있어 IDLE 을 다시 못 봤다.
+
+## 2026-10-20 fill --submit · hide-keyboard (CLI-F6-08) — 실기기 미확인(팜 꺼짐)
+- **`fill … --submit` = `mobile: performEditorAction {action:'done'}`.** playwright-cli `fill --submit`(Enter) 자리. Android 에서 Enter 키(`pressKey 66`)는 앱의 `onEditorAction` 에 `IME_NULL` 로 가서 actionId 만 보는 앱 · Compose `KeyboardActions` 가 안 받을 수 있어 IME 동작을 골랐다. 동작은 `done` 하나 — 검색 · 이동(`search` · `go`)만 받는 칸이 나오면 `--submit` 에 이름을 받게 넓힌다(`ponytail:` 주석). 좌표 fill(주소 없음)에도 똑같이 보낸다.
+- **Ran 줄은 동작마다 하나.** `Ran: await driver.$('…').setValue('…')` 다음 줄에 `Ran: await driver.execute('mobile: performEditorAction', { action: 'done' })` — 줄마다 그대로 옮겨 쓸 수 있다(「코드 한 줄」 규칙 유지).
+- **`hide-keyboard` = `POST /session/{id}/appium/device/hide_keyboard` `{}`**, 코드 `await driver.hideKeyboard()`. webdriverio `hideKeyboard()` 가 보내는 요청과 같아서 CLI 가 한 것 = 케이스가 할 것이다. UiAutomator2 의 `mobile: hideKeyboard` 도 있지만 Ran 줄과 요청이 갈라져 안 골랐다 — 팜(Appium 3 등)이 이 길을 막으면 그쪽으로 바꾼다. 다른 액션처럼 뒤에 자동 snapshot(앞 화면과 견줘 가라앉기).
+- **로그인 스크립트에도 받는다.** `hide-keyboard` 를 명령 목록에 더했고, `fill ~pw x --submit` 은 줄을 그대로 `run()` 에 넘기니 따로 할 일이 없다.
+- 확인 못 한 것(팜 꺼짐 — 127.0.0.1:4723 에 아무도 안 들음): `performEditorAction` 이 Appium Settings IME 로 잠깐 바꿔 보내는데 팜이 그 IME 를 허락하는지 · setValue 뒤 그 칸에 포커스가 남아 있는지(아니면 다른 칸에 done 이 간다) · 키보드가 없을 때 hide_keyboard 답(오류인지 false 인지) · 데모마켓 Compose `ImeAction.Done` 이 실제로 받는지.
+- 테스트 156개(153 + 3: fill --submit 요청 차례 · 몸 · Ran 두 줄 / hide-keyboard 요청 · Ran / 로그인 스크립트에 둘 다).
