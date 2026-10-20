@@ -45,5 +45,5 @@
 
 ## 지금 안 하는 것
 - iOS — `src/platform/ios.ts`(capabilities · XCUITest 화면 파서 · `~name` → `-ios predicate` 순위) 하나로 붙인다. appium-mcp `src/locators` 를 가져오면 NOTICE 를 단다. 팜 · runner 에 iOS 가 생긴 뒤
-- test_platform runner `화면을줄인다` 를 appium-cli 에서 가져오기 — 같은 코드가 두 곳이다. TP-5 뒤에 본다
+- test_platform runner `화면을줄인다` 를 appium-cli 에서 가져오기 — 같은 코드가 두 곳이다. TP-2 뒤에 본다
 - `hold/extend` — 작성 탐색은 30분 안에 끝난다. 길어지는 실측이 나오면 붙인다
