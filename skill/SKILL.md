@@ -45,6 +45,8 @@ npx appium-cli apis --session-id <id>             # 남이 연 session(kit 케�
 
 앱이 다른 꼴로 남기면 `--api-pattern '<식>'`(모임 둘: method · url)로 바꾼다.
 
+**앱 구조 훑기** — `npx appium-cli -s=probe crawl --max 50 --minutes 10` 이 화면 키 · 화면 연결을 `.appium-cli/crawl.json` 에 남긴다. 앱 첫 화면에서 시작한다(돌아오지 못하면 앱을 다시 띄워 경로를 다시 누른다). ⚠️ 아직 위험 버튼(로그아웃 · 탈퇴 · 결제)도 누른다 — 지워져도 되는 앱 · 계정에서만.
+
 화면 한 줄이 요소 하나다.
 
 ```

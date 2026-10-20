@@ -1,5 +1,7 @@
 // Appium 서버에 W3C WebDriver 요청을 보내는 얇은 클라이언트. URL 안 계정은 Basic 헤더로 옮긴다
 
+import { parseSource, type 화면 } from './platform/android.js';
+
 export interface 연결 {
   base: string;
   headers: Record<string, string>;
@@ -54,6 +56,36 @@ export async function 요소를찾는다(c: 연결, sid: string, using: string, 
 export async function logcat을읽는다(c: 연결, sid: string): Promise<string[]> {
   const v = (await 부른다(c, 'POST', `/session/${encodeURIComponent(sid)}/se/log`, { type: 'logcat' })) as { message: string }[] | null;
   return (v ?? []).map((e) => e.message);
+}
+
+// 테스트가 줄일 수 있게 묶어 둔다
+export const 가라앉기 = { 최대_ms: 3000, 간격_ms: 300 };
+
+async function 읽어온다(c: 연결, sid: string): Promise<화면> {
+  const xml = await 부른다(c, 'GET', `/session/${sid}/source`);
+  if (typeof xml !== 'string') throw new Error('Appium 이 화면 글을 주지 않았다');
+  return parseSource(xml);
+}
+
+/**
+ * 앞 화면 글(앞)을 주면 액션 뒤 화면이 바뀌고 가라앉을 때까지 다시 읽는다.
+ * React Native 앱은 누른 뒤 화면을 늦게 바꾼다 — 실측: 로그인 버튼 0.5초 뒤 snapshot 이 앞 화면이었다(2026-10-20 MDA).
+ * 안 바뀌는 액션(같은 화면 안 누르기 · 비밀번호 입력)은 최대_ms 를 다 기다리고 마지막 화면을 쓴다
+ */
+export async function 화면을기다린다(c: 연결, sid: string, 앞?: string): Promise<화면> {
+  let 화면 = await 읽어온다(c, sid);
+  if (앞 === undefined) return 화면;
+  let 바뀜 = 화면.글 !== 앞;
+  const 끝 = Date.now() + 가라앉기.최대_ms;
+  while (Date.now() < 끝) {
+    await new Promise((r) => setTimeout(r, 가라앉기.간격_ms));
+    const 다음 = await 읽어온다(c, sid);
+    const 같음 = 다음.글 === 화면.글;
+    화면 = 다음;
+    if (바뀜 && 같음) break;
+    if (다음.글 !== 앞) 바뀜 = true;
+  }
+  return 화면;
 }
 
 export function 좌표를누른다(c: 연결, sid: string, x: number, y: number): Promise<unknown> {

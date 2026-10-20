@@ -41,6 +41,14 @@ npx appium-cli apis --file logcat.txt          # 팜 logcat 파일 → [{"method
 npx appium-cli apis --session-id <id>          # 남이 연 session 에서 같은 JSON
 ```
 
+앱 구조를 스스로 훑는다 — 지금 화면부터 눌러 가며 화면 키(`app:<activity>/<화면 이름표>`) · 화면 연결을 모은다.
+
+```bash
+npx appium-cli -s=probe crawl --max 50 --minutes 10   # → .appium-cli/crawl.json
+```
+
+⚠️ 안 누를 것 판정(로그아웃 · 탈퇴 · 결제 …)은 다음 판(CLI-F5-03)이다 — 그 전에는 지워져도 되는 앱 · 계정에서만 돌린다.
+
 ## 연결
 
 | 값 | 옵션 | 환경값 |

@@ -6,7 +6,8 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { run, 가라앉기 } from '../src/cli.js';
+import { 가라앉기 } from '../src/appium.js';
+import { run } from '../src/cli.js';
 
 import { 화면XML } from './fixture.js';
 
