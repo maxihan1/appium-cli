@@ -127,3 +127,10 @@
 - **라이브러리 입구에 `farmArtifacts(appiumUrl, sessionId, outDir, { token }?)` → `Promise<{ files: [{name, bytes, path}], errors: string[] }>`** 를 더했다(이제 넷 — 테스트가 `Object.keys` 로 지킨다). CLI 와 같은 `산출물을받는다(c, sid, 폴더)` 를 부른다. errors 를 돌려주는 까닭: APP-F1-12 증적에서 영상이 빠진 까닭을 알아야 한다. 타입 `산출물` 은 따로 안 냈다.
 - 실측(읽기만, 폰 안 잡음): 팜 `lastSessionId` `9e8923ed…` 를 CLI 와 `farmArtifacts` 로 각각 받았다 — `logcat.txt` 862,058 · `video-1.mp4` 2,223,904 bytes(목록과 같음, `file` = ISO Media MP4, 둘이 같은 바이트), CLI 0.9초. 받은 logcat 을 `apis --file` 에 넣으니 `[]`(MDA release 빌드 — 꼴 확인은 F6-05).
 - 확인 못 한 것: 실제 `ready:false` 답(가짜 fetch 로만) · 팜 `errors` 의 실제 꼴 · 인증 켠 팜.
+
+## 2026-10-20 attrs (CLI-F6-03)
+- **ref 표의 요소에 `속성: Record<string,string>`(풀어 쓴 값)을 더했다** — parseSource 가 남기는 요소의 태그 속성 전부. 버린 껍데기 요소 · hierarchy 는 안 싣고 XML 통째로도 안 둔다. 비밀번호 칸(`password="true"`)은 `text` 키를 뺀다(빈 값이 아니라 없음 — `password=true` 줄이 보인다). snapshot 글은 한 글자도 안 바뀌었다(기존 테스트 그대로 통과). 라이브러리 `parseSource().refs` 에도 같이 나온다(더하기만).
+- **출력은 `키=값` 한 줄에 하나** — `class` · `resource-id` · `content-desc` · `text` · `hint`(있는 것만) 다음 나머지는 알파벳 차례(`sort()` — 키가 ASCII). 값 안 줄바꿈은 `\n` 두 글자로 적어 한 줄에 하나를 지킨다. 따옴표 · JSON 은 안 쓴다(값이 비면 `content-desc=`). `--raw` 는 없다. 없는 ref 는 `고른다()` 를 그대로 써 generate-locator 와 같은 글로 던진다. Appium 은 안 부른다(마지막 화면 ref 표만 본다).
+- 속성 이름은 Appium 이 준 그대로(`class` 는 전체 이름 `android.widget.EditText`, 줄인 `cls` 와 다르다). 없는 속성을 지어내지 않는다 — hint · 최대 글자가 page source 에 있으면 나올 뿐이다.
+- session 파일이 커진다 — 요소마다 속성 20개 안팎(실기기 기준 추정). 70개 화면이면 수십 KB, 들여쓰기 2칸 JSON 그대로 둔다. 이 버전 전에 찍은 session 파일에는 `속성` 이 없다 — snapshot 을 다시 찍으면 생긴다.
+- 확인 못 한 것: 실기기 page source 에 `hint` · max length 같은 속성이 실제로 오는지(UiAutomator2 판 · 앱마다 다르다) — F6-05 에서 데모마켓으로 본다. session 파일 실제 크기도 그때.
