@@ -32,7 +32,8 @@ interface 세션 {
 
 export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
 
-  open [--app <apk|URL>] [--udid <id>] [--filter <조건>]   앱을 띄우고 첫 화면을 찍는다
+  open [--app <apk|URL>] [--udid <id>] [--filter <조건>] [--cap <키=값>]   앱을 띄우고 첫 화면을 찍는다
+                                     --cap 은 capabilities 에 더한다 (여러 번 · 값이 JSON 이면 JSON · 기본값을 덮는다)
   snapshot [--raw]                   화면을 파일로 떨군다 (--raw 면 글을 그대로)
   find <글자> | --regex <식>           마지막 화면에서 줄을 찾는다
   tap <ref|선택자>                     누른다 (click 도 같다). 선택자 '~desc' · 'id=…' 는 지금 화면에서 찾는다
@@ -99,6 +100,22 @@ function 스크립트읽기(글: string): string[][] {
   });
   if (줄들.length === 0) throw new Error('로그인 스크립트가 비었다');
   return 줄들;
+}
+
+// --cap 키=값 — 첫 = 에서 가른다(값에 = 가 들어간다). 값이 JSON(true · 5 · ["a"] · "따옴표")이면 그 값, 아니면 글 그대로
+function 캡읽기(쌍들: string[]): Record<string, unknown> {
+  return Object.fromEntries(
+    쌍들.map((쌍) => {
+      const i = 쌍.indexOf('=');
+      if (i < 1) throw new Error(`--cap 은 키=값 꼴이다(키가 비면 안 된다): ${쌍}`);
+      const 값 = 쌍.slice(i + 1);
+      try {
+        return [쌍.slice(0, i), JSON.parse(값) as unknown];
+      } catch {
+        return [쌍.slice(0, i), 값];
+      }
+    }),
+  );
 }
 
 async function 읽는다(파일: string): Promise<세션> {
@@ -169,6 +186,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       filename: { type: 'string' },
       minutes: { type: 'string' },
       filter: { type: 'string' },
+      cap: { type: 'string', multiple: true },
       grep: { type: 'string' },
       api: { type: 'boolean' },
       'api-pattern': { type: 'string' },
@@ -242,8 +260,9 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
     if (있음) throw new Error(`session ${이름} 이 이미 열려 있다 — close 부터 한다`);
     const app = values.app ?? env.PLATFORM_APP;
     if (!app) throw new Error('앱을 띄우려면 --app 이나 PLATFORM_APP 이 필요하다');
+    const 더 = 캡읽기(values.cap ?? []);
     const 열림 = (await 부른다(c, 'POST', '/session', {
-      capabilities: { alwaysMatch: capabilities(app, values.udid ?? env.PLATFORM_DEVICE_UDID, values.filter) },
+      capabilities: { alwaysMatch: { ...capabilities(app, values.udid ?? env.PLATFORM_DEVICE_UDID, values.filter), ...더 } },
     })) as { sessionId?: string } | undefined;
     if (열림?.sessionId === undefined) throw new Error('Appium 이 session 번호를 주지 않았다');
     const s: 세션 = { sessionId: 열림.sessionId, snapshot: null, refs: {}, width: 0, height: 0 };

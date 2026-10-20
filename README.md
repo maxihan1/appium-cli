@@ -107,6 +107,16 @@ apiLines(logcatLines);          // [{ method, url, at }] — apis --file 과 같
 | 폰 지정 | `--udid` | `PLATFORM_DEVICE_UDID` |
 | 팜 폰 고르기 (`os>=13,model=SM-*`) | `--filter` | — |
 | API 줄 꼴 (모임 둘: method · url) | `--api-pattern` | — |
+| capabilities 더하기 (`open`, 여러 번 · 값이 JSON 이면 JSON · 기본값을 덮는다) | `--cap <키=값>` | — |
+
+팜 · 컨테이너는 `adb reverse` 를 못 쓰니 앱 서버 주소 같은 값은 `--cap` 으로 준다(데모마켓 예).
+
+```bash
+npx appium-cli -s=probe open --app https://farm/demo-market.apk \
+  --cap appium:optionalIntentArguments='--es server http://host:3002' \
+  --cap appium:autoGrantPermissions=true \
+  --cap appium:logcatFilterSpecs='["OkHttp:D","*:S"]'
+```
 
 에이전트 지침은 [`skill/SKILL.md`](skill/SKILL.md), 결정과 실측은 [`context-notes.md`](context-notes.md), 진행판은 [`docs/wbs.md`](docs/wbs.md).
 

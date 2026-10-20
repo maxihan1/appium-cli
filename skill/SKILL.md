@@ -76,5 +76,6 @@ ViewGroup id=com.shop:id/root [0,0][1080,2400] [ref=e1]
 | 앱 — apk 경로(Appium 이 도는 컴퓨터 기준) 또는 URL(팜은 URL — 받는 쪽이 팜 PC) | `--app` | `PLATFORM_APP` |
 | 폰 지정 | `--udid` | `PLATFORM_DEVICE_UDID` |
 | 팜 폰 고르기 조건 (`os>=13,model=SM-*,tag=결제팀` — 쉼표는 AND) | `--filter` | — |
+| capabilities 더하기 — `open` 에 여러 번, 값이 JSON 이면 JSON (`--cap appium:optionalIntentArguments='--es server http://host:3002'` · `--cap appium:autoGrantPermissions=true`) | `--cap <키=값>` | — |
 
 상태 파일은 `.appium-cli/` 에 쌓인다(gitignore 대상).

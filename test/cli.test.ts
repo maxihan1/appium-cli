@@ -85,6 +85,42 @@ describe('open', () => {
     expect(caps).toMatchObject({ 'appium:app': 'https://farm/app.apk', 'farm:filter': 'os>=13' });
   });
 
+  it('--cap 은 JSON 이면 JSON 값, 아니면 글 그대로 싣고 첫 = 에서 가르고 기본값을 덮는다', async () => {
+    await run(['-s=probe', 'close'], env);
+    fetchMock.mockClear();
+
+    await run(
+      [
+        '-s=probe', 'open',
+        '--cap', 'appium:optionalIntentArguments=--es server http://host:3002?a=b',
+        '--cap', 'appium:autoGrantPermissions=true',
+        '--cap', 'appium:logcatFilterSpecs=["OkHttp:D","*:S"]',
+        '--cap', 'appium:newCommandTimeout=600',
+        '--cap', 'x:quoted="5"',
+      ],
+      env,
+    );
+
+    const caps = JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string).capabilities.alwaysMatch;
+    expect(caps).toMatchObject({
+      'appium:app': '/apk/dev.apk',
+      'appium:optionalIntentArguments': '--es server http://host:3002?a=b',
+      'appium:autoGrantPermissions': true,
+      'appium:logcatFilterSpecs': ['OkHttp:D', '*:S'],
+      'appium:newCommandTimeout': 600,
+      'x:quoted': '5',
+    });
+  });
+
+  it('--cap 키가 비거나 = 가 없으면 Appium 을 부르지 않고 던진다', async () => {
+    await run(['-s=probe', 'close'], env);
+    fetchMock.mockClear();
+
+    await expect(run(['-s=probe', 'open', '--cap', '=true'], env)).rejects.toThrow('키가 비면 안 된다');
+    await expect(run(['-s=probe', 'open', '--cap', 'appium:noReset'], env)).rejects.toThrow('키=값 꼴');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('같은 이름이 열려 있으면 Appium 을 부르지 않고 던진다', async () => {
     await expect(run(['-s=probe', 'open'], env)).rejects.toThrow('이미 열려 있다');
     expect(fetchMock).not.toHaveBeenCalled();
