@@ -4,7 +4,7 @@ import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { parseArgs } from 'node:util';
 
-import { logcat을읽는다, 가라앉기, 연결주소, 부른다, 요소를찾는다, 좌표를누른다, 화면을기다린다, type 연결 } from './appium.js';
+import { logcat을읽는다, 가라앉기, 산출물을받는다, 연결주소, 부른다, 요소를찾는다, 좌표를누른다, 화면을기다린다, type 연결 } from './appium.js';
 import { crawl, 본다 } from './crawl.js';
 import { 결과파일들, 상태인가, 저장본모양 } from './crawl-out.js';
 import { apiLines } from './logcat.js';
@@ -43,10 +43,12 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
   screenshot [--filename <파일>]       스크린샷
   generate-locator <ref>             webdriverio 선택자
   screen                             지금 화면 키 · 이름 (crawl 과 같은 키 — 앱 화면 파일의 화면 주소 값)
-  close                              session 을 닫는다
+  close                              session 을 닫는다 (번호를 남겨 artifacts 가 쓴다)
   list                               열린 session 목록
   logs [--grep <식>] [--api]          logcat 새 줄 (첫 호출은 쌓인 줄을 버린다) · --api 면 API 줄만 METHOD URL
   apis --session-id <id> | --file <logcat.txt>   남이 연 session · 팜 logcat 파일에서 API 를 [{method,url,at}] JSON 으로
+  artifacts [sessionId] [--out <폴더>]   팜이 session 마다 남긴 영상 · logcat.txt 를 받는다
+                                     (sessionId 가 없으면 이 이름으로 마지막에 close 한 session · 기본 .appium-cli/artifacts/<id>/)
   crawl [--max 50] [--minutes 10] [--exclude <식>] [--out <폴더>] [--keep <저장본>] [--login <스크립트> [--role <역할>]]
                                      지금 화면부터 눌러 가며 화면 파일 · list · index · links · apis · summary.json 을
                                      --out(기본 .appium-cli/crawl)에 (--max 는 100 장까지). --keep 이면 저장본과 같음 · 바뀜 · 새 화면
@@ -208,6 +210,8 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
   if (!/^[\w-]+$/.test(이름)) throw new Error(`session 이름은 글자 · 숫자 · _ · - 만 쓴다: ${이름}`);
   await mkdir(폴더, { recursive: true });
   const 파일 = join(폴더, `${이름}.json`);
+  // 마지막에 close 한 session 번호 — artifacts 가 번호 없이 받는다
+  const 마지막 = join(폴더, `${이름}.last`);
 
   if (명령 === 'list') {
     const 이름들 = (await readdir(폴더)).filter((f) => f.endsWith('.json')).map((f) => f.slice(0, -5));
@@ -253,6 +257,16 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
     const 줄 = values.file !== undefined ? (await readFile(values.file, 'utf8')).split(/\r?\n/) : sid !== undefined ? await logcat을읽는다(c, sid) : null;
     if (줄 === null) throw new Error('apis 에 --session-id <id> 나 --file <logcat.txt> 가 필요하다');
     return JSON.stringify(apiLines(줄, API꼴(values['api-pattern'])));
+  }
+
+  // 팜 산출물 — 닫힌 session 도 받는다(30일 보관). CLI session 파일은 안 쓴다
+  if (명령 === 'artifacts') {
+    const sid = 인자[0] ?? (await readFile(마지막, 'utf8').catch(() => '')).trim();
+    if (!sid) throw new Error(`받을 session 을 모른다 — artifacts <sessionId> 로 주거나 -s=${이름} 으로 close 를 먼저 한다`);
+    if (!/^[\w-]+$/.test(sid)) throw new Error(`session 번호는 글자 · 숫자 · _ · - 만 쓴다: ${sid}`);
+    const { files, errors } = await 산출물을받는다(c, sid, values.out ?? join(폴더, 'artifacts', sid));
+    const 줄 = [...files.map((f) => `- ${f.name} ${f.bytes} bytes: ${f.path}`), ...errors.map((e) => `팜 오류: ${e}`)];
+    return 줄.length === 0 ? `session ${sid} 산출물이 없다` : 줄.join('\n');
   }
 
   if (명령 === 'open') {
@@ -366,6 +380,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
         await 부른다(c, 'DELETE', `/session/${sid}`);
       } finally {
         await rm(파일, { force: true });
+        await writeFile(마지막, sid);
       }
       return `session ${이름} 닫힘`;
     }

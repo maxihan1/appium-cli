@@ -1,5 +1,8 @@
 // Appium 서버에 W3C WebDriver 요청을 보내는 얇은 클라이언트. URL 안 계정은 Basic 헤더로 옮긴다
 
+import { mkdir, stat, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
 import { parseSource, type 화면 } from './platform/android.js';
 
 export interface 연결 {
@@ -59,7 +62,8 @@ export async function logcat을읽는다(c: 연결, sid: string): Promise<string
 }
 
 // 테스트가 줄일 수 있게 묶어 둔다. 찾기_ms 는 선택자로 찾을 때 — 앱 데이터를 지운 뒤 처음 뜨는 데 몇 초 걸린다
-export const 가라앉기 = { 최대_ms: 3000, 간격_ms: 300, 찾기_ms: 10_000 };
+// 산출물_ms 는 팜이 session 산출물(영상 · logcat)을 다 만들 때까지(ready:false) 기다리는 시간
+export const 가라앉기 = { 최대_ms: 3000, 간격_ms: 300, 찾기_ms: 10_000, 산출물_ms: 15_000, 산출물간격_ms: 1000 };
 
 async function 읽어온다(c: 연결, sid: string): Promise<화면> {
   const xml = await 부른다(c, 'GET', `/session/${sid}/source`);
@@ -104,4 +108,53 @@ export function 좌표를누른다(c: 연결, sid: string, x: number, y: number)
       },
     ],
   });
+}
+
+export interface 산출물 {
+  name: string;
+  bytes: number;
+  path: string;
+}
+
+interface 산출물목록 {
+  ready?: boolean;
+  files?: { name: string; bytes?: number; url: string }[];
+  errors?: unknown[];
+}
+
+// ponytail: 내려받기 10분 상한 — 더 긴 영상이 끊기면 늘린다
+const 내려받기_ms = 600_000;
+
+/**
+ * 팜 session 산출물(`GET /api/sessions/{id}/artifacts` — logcat.txt · video-N.mp4 …, 30일 보관)을 폴더에 받는다.
+ * 팜이 아직 만드는 중(ready:false)이면 산출물_ms 까지 다시 본다. files[].url 은 팜 원점 기준 경로(`/wd/hub/api/…`)다
+ */
+export async function 산출물을받는다(c: 연결, sid: string, 폴더: string): Promise<{ files: 산출물[]; errors: string[] }> {
+  const 끝 = Date.now() + 가라앉기.산출물_ms;
+  let v = (await 부른다(c, 'GET', `/api/sessions/${encodeURIComponent(sid)}/artifacts`)) as 산출물목록 | null;
+  while (v?.ready === false) {
+    if (Date.now() >= 끝) throw new Error(`팜이 session ${sid} 산출물을 ${가라앉기.산출물_ms / 1000}초 안에 다 만들지 못했다(ready:false) — 조금 뒤 다시 한다`);
+    await new Promise((ok) => setTimeout(ok, 가라앉기.산출물간격_ms));
+    v = (await 부른다(c, 'GET', `/api/sessions/${encodeURIComponent(sid)}/artifacts`)) as 산출물목록 | null;
+  }
+  const 목록 = v?.files ?? [];
+  // 팜이 준 이름으로 파일을 만드니 폴더 밖으로 못 나가게 먼저 다 본다
+  for (const f of 목록) {
+    if (typeof f.name !== 'string' || f.name === '' || /[/\\]/.test(f.name) || f.name.includes('..')) throw new Error(`팜이 준 파일 이름을 쓸 수 없다: ${JSON.stringify(f.name)}`);
+  }
+  await mkdir(폴더, { recursive: true });
+  const files: 산출물[] = [];
+  for (const f of 목록) {
+    const 주소 = new URL(f.url, c.base);
+    // 토큰을 다른 곳에 보내지 않는다
+    if (주소.origin !== new URL(c.base).origin) throw new Error(`${f.name} 주소가 팜 밖이다: ${주소.href}`);
+    const res = await fetch(주소.href, { headers: c.headers, signal: AbortSignal.timeout(내려받기_ms) });
+    if (!res.ok || res.body === null) throw new Error(`${f.name} 을 받지 못했다 — HTTP ${res.status}`);
+    const path = join(폴더, f.name);
+    await writeFile(path, res.body);
+    const bytes = (await stat(path)).size;
+    if (f.bytes !== undefined && f.bytes !== bytes) throw new Error(`${f.name} 크기가 맞지 않는다 — 받은 ${bytes} · 팜 ${f.bytes} bytes`);
+    files.push({ name: f.name, bytes, path });
+  }
+  return { files, errors: (v?.errors ?? []).map((e) => (typeof e === 'string' ? e : JSON.stringify(e))) };
 }

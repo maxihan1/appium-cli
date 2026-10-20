@@ -42,6 +42,17 @@ npx appium-cli apis --file logcat.txt          # 팜 logcat 파일 → [{"method
 npx appium-cli apis --session-id <id>          # 남이 연 session 에서 같은 JSON
 ```
 
+디바이스 팜은 session 마다 영상 · logcat 을 남긴다(30일 보관). `artifacts` 가 받는다 — 받은 `logcat.txt` 는 `apis --file` 에 그대로 넣는다.
+
+```bash
+npx appium-cli -s=probe close                  # 번호를 남긴다
+npx appium-cli -s=probe artifacts              # - video-1.mp4 2223904 bytes: .appium-cli/artifacts/<id>/video-1.mp4 …
+npx appium-cli artifacts <sessionId> --out ev  # 남이 연 session · 다른 폴더
+npx appium-cli apis --file .appium-cli/artifacts/<id>/logcat.txt
+```
+
+팜이 아직 만드는 중(`ready:false`)이면 15초까지 기다린다.
+
 앱 구조를 스스로 훑는다 — 지금 화면부터 눌러 가며 화면 키(`app:<activity>/<화면 이름표>`) · 화면 연결을 모은다.
 
 ```bash
@@ -90,11 +101,12 @@ npx appium-cli -s=probe screen                 # app:.Main/login screen · Login
 test_platform kit · 러너 · 스캐너는 CLI 를 띄우지 않고 같은 규칙을 부른다.
 
 ```ts
-import { screenKey, parseSource, apiLines } from 'appium-cli';
+import { screenKey, parseSource, apiLines, farmArtifacts } from 'appium-cli';
 
 screenKey(xml, '.Main');        // { key: 'app:.Main/login screen', name: 'Login', structFp: '3f2a…' } — xml 은 GET /session/:id/source, '.Main' 은 current_activity
 parseSource(xml);               // { 글, refs, width, height } — snapshot 파일과 같은 글 · ref 표
 apiLines(logcatLines);          // [{ method, url, at }] — apis --file 과 같다 (둘째 인자로 꼴 바꾸기)
+await farmArtifacts('http://farm:4723/wd/hub', sessionId, 'out', { token });   // { files: [{ name, bytes, path }], errors } — artifacts 와 같다
 ```
 
 ## 연결

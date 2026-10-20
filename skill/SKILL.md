@@ -44,6 +44,8 @@ npx appium-cli apis --file logcat.txt             # 팜 logcat 파일 → [{"met
 npx appium-cli apis --session-id <id>             # 남이 연 session(kit 케이스)에서 같은 JSON
 ```
 
+**팜 증적 — 영상 · logcat** 은 session 이 닫힌 뒤 받는다. `npx appium-cli -s=probe artifacts` 가 그 이름으로 마지막에 close 한 session 의 `video-N.mp4` · `logcat.txt` 를 `.appium-cli/artifacts/<id>/`(`--out <폴더>`)에 받는다. 남의 session 은 `artifacts <sessionId>`. 받은 `logcat.txt` 는 `apis --file` 에 넣는다. 코드에서는 `farmArtifacts(appiumUrl, sessionId, outDir, { token })`.
+
 앱이 다른 꼴로 남기면 `--api-pattern '<식>'`(모임 둘: method · url)로 바꾼다.
 
 **앱 구조 훑기** — `npx appium-cli -s=probe crawl --max 50 --minutes 10` 이 화면마다 파일 · `list.json` · `links.json` · `apis.json` · `summary.json` 을 test_platform 크롤러 꼴로 `.appium-cli/crawl/`(`--out <폴더>`)에 남긴다. 이전 저장본이 있으면 `--keep <저장본 json>` — 화면마다 같음 · 바뀜 · 새 화면을 `list.json` 과 요약 줄에 낸다. 앱 첫 화면에서 시작한다(돌아오지 못하면 앱을 다시 띄워 경로를 다시 누른다). 위험 글자(삭제 · 결제 · 담기 …) 버튼은 안 누르고(로그아웃은 로그인 판에서 다시 로그인할 수 있을 때만), 탈퇴 흐름 화면에서는 아무것도 안 누르고, 확인 창은 경고 · 탈퇴 · 입력칸이면 back 한다. 더 뺄 버튼은 `--exclude '<식>'`(여러 번, `/식/i` 꼴). 로그인 뒤 화면도 보려면 `--login <스크립트>`(`--role <역할>`, 기본 일반 회원) — 로그아웃 판 뒤 앱 데이터를 지우고 스크립트로 로그인해 한 번 더 돈다(장수 · 시간은 판마다 나눈다). 스크립트는 `appium-cli -s=<이름>` 뒤에 쓰는 명령을 한 줄에 하나(`tap` · `fill` · `back` · `swipe` 만, ref 대신 선택자, 띄어쓰기는 따옴표 — `fill '~Username input field' bob@example.com`)이고 끝나면 앱 첫 화면이어야 한다. 계정 값은 스크립트 파일에만 두고 대화 · 커밋에 싣지 않는다.

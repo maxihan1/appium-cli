@@ -1,6 +1,6 @@
 // CLI 명령이 Appium 에 보내는 요청 순서 · 출력 · session 파일을 본다. 네트워크는 fetch 가짜로 막는다
 
-import { existsSync, mkdtempSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -34,7 +34,7 @@ function 가짜(): void {
 const 부른길 = (): string[] => (fetchMock.mock.calls as [string, RequestInit][]).map(([u, i]) => `${i.method} ${u.replace('http://farm:4723/wd/hub', '')}`);
 
 beforeEach(async () => {
-  Object.assign(가라앉기, { 최대_ms: 0, 간격_ms: 0, 찾기_ms: 10_000 });
+  Object.assign(가라앉기, { 최대_ms: 0, 간격_ms: 0, 찾기_ms: 10_000, 산출물_ms: 0, 산출물간격_ms: 0 });
   process.chdir(mkdtempSync(join(tmpdir(), 'appium-cli-')));
   fetchMock.mockReset();
   가짜();
@@ -347,8 +347,8 @@ describe('logcat', () => {
     expect(입구.apiLines(새줄.map((e) => e.message))).toEqual(JSON.parse(await run(['apis', '--file', 'logcat.txt'], env)));
   });
 
-  it('라이브러리는 screenKey · parseSource · apiLines 만 낸다', () => {
-    expect(Object.keys(입구).sort()).toEqual(['apiLines', 'parseSource', 'screenKey']);
+  it('라이브러리는 screenKey · parseSource · apiLines · farmArtifacts 만 낸다', () => {
+    expect(Object.keys(입구).sort()).toEqual(['apiLines', 'farmArtifacts', 'parseSource', 'screenKey']);
   });
 
   it('apis --session-id 는 CLI session 파일 없이 남의 session 을 읽고 쌓인 줄도 버리지 않는다', async () => {
@@ -362,5 +362,84 @@ describe('logcat', () => {
 
   it('apis 에 읽을 곳이 없으면 던진다', async () => {
     await expect(run(['apis'], env)).rejects.toThrow('--session-id <id> 나 --file');
+  });
+});
+
+describe('팜 산출물', () => {
+  const 영상 = Buffer.from([0x00, 0xff, 0x1a, 0x45, 0xdf, 0xa3, 0x0d, 0x0a]);
+  const 목록 = (sid: string, ready = true, files = [
+    { name: 'logcat.txt', bytes: 11, url: `/wd/hub/api/sessions/${sid}/artifacts/logcat.txt` },
+    { name: 'video-1.mp4', bytes: 영상.length, url: `/wd/hub/api/sessions/${sid}/artifacts/video-1.mp4` },
+  ]): Response => 답({ sessionId: sid, ready, files: ready ? files : [], errors: [] });
+  // 목록을 부를 때마다 앞에서 하나씩 준다 — 실측 팜 답 꼴(files[].url 은 팜 원점 기준 경로)
+  function 산출물답(...차례: Response[]): void {
+    const 기본 = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
+      if (url.endsWith('/artifacts')) return 차례.shift()!;
+      if (url.endsWith('/logcat.txt')) return new Response('줄 하나\n');
+      if (url.endsWith('/video-1.mp4')) return new Response(영상);
+      return 기본(url, init);
+    });
+  }
+  const 주소들 = (): string[] => (fetchMock.mock.calls as [string, RequestInit][]).map(([u]) => u);
+
+  it('session 번호를 주면 목록을 읽고 파일마다 같은 인증 머리로 받아 한 줄씩 낸다', async () => {
+    산출물답(목록('kit-7'));
+
+    const out = await run(['artifacts', 'kit-7', '--out', 'got'], { ...env, PLATFORM_APPIUM_TOKEN: 'pat_x' });
+
+    expect(out).toBe('- logcat.txt 11 bytes: got/logcat.txt\n- video-1.mp4 8 bytes: got/video-1.mp4');
+    expect(주소들()).toEqual([
+      'http://farm:4723/wd/hub/api/sessions/kit-7/artifacts',
+      'http://farm:4723/wd/hub/api/sessions/kit-7/artifacts/logcat.txt',
+      'http://farm:4723/wd/hub/api/sessions/kit-7/artifacts/video-1.mp4',
+    ]);
+    for (const [, init] of fetchMock.mock.calls as [string, RequestInit][]) expect((init.headers as Record<string, string>).Authorization).toBe('Bearer pat_x');
+    expect(readFileSync('got/video-1.mp4').equals(영상)).toBe(true);
+    expect(readFileSync('got/logcat.txt', 'utf8')).toBe('줄 하나\n');
+  });
+
+  it('번호가 없으면 이 이름으로 마지막에 close 한 session 을 기본 폴더에 받는다', async () => {
+    await expect(run(['-s=probe', 'artifacts'], env)).rejects.toThrow('close 를 먼저 한다');
+    await run(['-s=probe', 'close'], env);
+    산출물답(목록('s-1'));
+    fetchMock.mockClear();
+
+    const out = await run(['-s=probe', 'artifacts'], env);
+
+    expect(out.split('\n')[0]).toBe('- logcat.txt 11 bytes: .appium-cli/artifacts/s-1/logcat.txt');
+    expect(주소들()[0]).toBe('http://farm:4723/wd/hub/api/sessions/s-1/artifacts');
+    expect(await run(['list'], env)).toBe('열린 session 이 없다');
+  });
+
+  it('팜이 아직 만드는 중(ready:false)이면 다시 보고, 시간이 지나면 까닭을 붙여 던진다', async () => {
+    가라앉기.산출물_ms = 1000;
+    산출물답(목록('kit-7', false), 목록('kit-7', false), 목록('kit-7'));
+    expect(await run(['artifacts', 'kit-7'], env)).toMatch(/^- logcat\.txt/);
+    expect(주소들().filter((u) => u.endsWith('/artifacts'))).toHaveLength(3);
+
+    가라앉기.산출물_ms = 0;
+    산출물답(목록('kit-7', false));
+    await expect(run(['artifacts', 'kit-7'], env)).rejects.toThrow('ready:false');
+  });
+
+  it('폴더 밖으로 나가는 파일 이름이면 아무것도 받지 않고 던진다', async () => {
+    산출물답(목록('kit-7', true, [
+      { name: 'logcat.txt', bytes: 11, url: '/wd/hub/api/sessions/kit-7/artifacts/logcat.txt' },
+      { name: '../evil.sh', bytes: 1, url: '/x' },
+    ]));
+
+    await expect(run(['artifacts', 'kit-7', '--out', 'got'], env)).rejects.toThrow('파일 이름을 쓸 수 없다: "../evil.sh"');
+    expect(주소들()).toHaveLength(1);
+    expect(existsSync('got/logcat.txt')).toBe(false);
+  });
+
+  it('farmArtifacts 는 CLI 와 같은 길로 받고 팜 오류도 돌려준다', async () => {
+    산출물답(답({ sessionId: 'kit-7', ready: true, files: [{ name: 'video-1.mp4', bytes: 8, url: '/wd/hub/api/sessions/kit-7/artifacts/video-1.mp4' }], errors: ['logcat 없음'] }));
+
+    const r = await 입구.farmArtifacts('http://farm:4723/wd/hub', 'kit-7', 'lib', { token: 'pat_y' });
+
+    expect(r).toEqual({ files: [{ name: 'video-1.mp4', bytes: 8, path: 'lib/video-1.mp4' }], errors: ['logcat 없음'] });
+    expect(((fetchMock.mock.calls[1] as [string, RequestInit])[1].headers as Record<string, string>).Authorization).toBe('Bearer pat_y');
   });
 });
