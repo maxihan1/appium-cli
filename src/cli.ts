@@ -38,7 +38,8 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
   snapshot [--raw]                   화면을 파일로 떨군다 (--raw 면 글을 그대로)
   find <글자> | --regex <식>           마지막 화면에서 줄을 찾는다
   tap <ref|선택자>                     누른다 (click 도 같다). 선택자 '~desc' · 'id=…' 는 지금 화면에서 찾는다
-  fill <ref|선택자> <값>                입력한다
+  fill <ref|선택자> <값> [--submit]     입력한다 (--submit 이면 넣은 뒤 키보드 완료(IME done)를 보낸다)
+  hide-keyboard                      키보드를 내린다 (아래 버튼을 가릴 때)
   swipe up|down|left|right           손가락을 그 방향으로 민다
   back                               뒤로
   screenshot [--filename <파일>]       스크린샷
@@ -60,7 +61,7 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
                                      못 돌아오면 이미 본 연결로 가 보고, 안 되면 앱을 다시 띄워 경로를 다시 누른다
                                      --login 이면 로그아웃 판 뒤 앱 데이터를 지우고 스크립트로 로그인해 로그인:<역할>(기본 일반 회원) 판을 돈다
                                      로그아웃은 로그인 판에서 다시 로그인할 수 있을 때만 누른다 (다시 로그인은 세 번까지)
-                                     스크립트는 한 줄에 tap · fill · back · swipe 하나 (선택자는 따옴표로: fill '~Username input field' bob)
+                                     스크립트는 한 줄에 tap · fill · back · swipe · hide-keyboard 하나 (선택자는 따옴표로: fill '~Username input field' bob)
 
 디바이스 팜 (session 을 열기 전에 폰을 잡는다)
   devices                            팜의 폰과 상태
@@ -91,7 +92,7 @@ function API꼴(s: string | undefined): RegExp | undefined {
 }
 
 // 로그인 스크립트에 쓸 수 있는 명령 — 앱 안에서 누르고 넣는 것만 (open · close · crawl 은 session 을 바꾼다)
-const 스크립트명령 = new Set(['tap', 'click', 'fill', 'back', 'swipe']);
+const 스크립트명령 = new Set(['tap', 'click', 'fill', 'back', 'swipe', 'hide-keyboard']);
 
 // ref 대신 선택자(`~desc` · `id=…`)도 받는다 — 로그인 스크립트처럼 ref 번호를 모르고 쓸 때
 const 선택자인가 = (x: string | undefined): x is string => x !== undefined && /^(?:~|id=)./.test(x);
@@ -101,7 +102,7 @@ function 스크립트읽기(글: string): string[][] {
   const 줄들 = 글.split(/\r?\n/).flatMap((줄, i) => {
     const 낱 = [...줄.matchAll(/'([^']*)'|"([^"]*)"|(\S+)/g)].map((m) => m[1] ?? m[2] ?? m[3]!);
     if (낱.length === 0 || 낱[0]!.startsWith('#')) return [];
-    if (!스크립트명령.has(낱[0]!)) throw new Error(`로그인 스크립트 ${i + 1}줄: ${낱[0]} 은 못 쓴다 — tap · fill · back · swipe 만`);
+    if (!스크립트명령.has(낱[0]!)) throw new Error(`로그인 스크립트 ${i + 1}줄: ${낱[0]} 은 못 쓴다 — tap · fill · back · swipe · hide-keyboard 만`);
     if (['tap', 'click', 'fill'].includes(낱[0]!) && !선택자인가(낱[1])) throw new Error(`로그인 스크립트 ${i + 1}줄: ref 대신 선택자('~desc' · 'id=…')를 쓴다`);
     return [낱];
   });
@@ -225,6 +226,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       keep: { type: 'string' },
       login: { type: 'string' },
       role: { type: 'string' },
+      submit: { type: 'boolean' },
     },
   });
   const [명령, ...인자] = positionals;
@@ -460,6 +462,12 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
         코드 = `// ${막힘} (좌표 ${p.x},${p.y} 칸에 넣었다)`;
       }
       await 부른다(c, 'POST', `/session/${sid}/element/${id}/value`, { text: 값 });
+      // playwright-cli fill --submit(Enter) 자리 — Android 는 키보드의 완료 동작. Appium Settings IME 로 잠깐 바꿔 지금 포커스 칸에 보낸다
+      // ponytail: done 만 보낸다 — 검색 · 이동(search · go)만 받는 칸이 나오면 --submit 에 동작 이름을 받는다
+      if (values.submit === true) {
+        await 부른다(c, 'POST', `/session/${sid}/execute/sync`, { script: 'mobile: performEditorAction', args: [{ action: 'done' }] });
+        코드 += "\nRan: await driver.execute('mobile: performEditorAction', { action: 'done' })";
+      }
       break;
     }
     case 'swipe': {
@@ -470,6 +478,12 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
         args: [{ left: s.width * 0.1, top: s.height * 0.2, width: s.width * 0.8, height: s.height * 0.6, direction: 방향, percent: 0.75 }],
       });
       코드 = `await driver.swipe({ direction: ${따옴표(방향!)} })`;
+      break;
+    }
+    case 'hide-keyboard': {
+      // webdriverio hideKeyboard() 가 부르는 길 그대로 — Ran 줄과 같은 요청이다. 키보드가 없을 때 팜 답은 아직 못 봤다
+      await 부른다(c, 'POST', `/session/${sid}/appium/device/hide_keyboard`, {});
+      코드 = 'await driver.hideKeyboard()';
       break;
     }
     case 'back': {

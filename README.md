@@ -22,6 +22,8 @@ npx appium-cli -s=probe find --regex "/log ?in/i"
 npx appium-cli -s=probe tap e19                # Ran: await driver.$('~menu item log in').click()
 npx appium-cli -s=probe tap '~open menu'       # ref 대신 선택자도 된다 — 지금 화면에서 찾는다(앱이 뜨는 동안 10초까지 기다린다)
 npx appium-cli -s=probe fill e11 'bob@example.com'
+npx appium-cli -s=probe fill e12 '10203040' --submit   # 넣은 뒤 키보드 완료(mobile: performEditorAction done) — Ran 줄 둘
+npx appium-cli -s=probe hide-keyboard          # 키보드가 아래 버튼을 가리면 — Ran: await driver.hideKeyboard()
 npx appium-cli -s=probe generate-locator e17   # driver.$('~Login button')
 npx appium-cli -s=probe close
 npx appium-cli release                         # 놓는다 — 팜이 깐 앱 · 앱 데이터를 지운다
@@ -68,7 +70,7 @@ npx appium-cli -s=probe crawl --out ../data/crawl --keep ../data/kept/index.json
 ```
 
 `--login <스크립트>` 면 로그아웃 판을 돈 뒤 앱 데이터를 지우고(`mobile: clearApp`, 팜이 막으면 `terminateApp` 으로 끄기만) 스크립트로 로그인해 `로그인:<역할>` 판(`--role`, 기본 `일반 회원`)을 돈다. `--max` · `--minutes` 는 판마다 나눈다(앞 판이 덜 쓴 장수는 뒤로).
-스크립트는 `appium-cli -s=<이름>` 뒤에 쓰는 명령을 한 줄에 하나씩 — `tap` · `fill` · `back` · `swipe` 만, `tap` · `fill` 은 ref 대신 선택자(`~desc` · `id=…`)로, 띄어쓰기는 따옴표로 묶는다. 빈 줄 · `#` 줄은 건너뛴다. 끝나면 앱 첫 화면이어야 한다(크롤이 앱을 다시 띄워 거기서 경로를 누른다).
+스크립트는 `appium-cli -s=<이름>` 뒤에 쓰는 명령을 한 줄에 하나씩 — `tap` · `fill`(`--submit` 도) · `back` · `swipe` · `hide-keyboard` 만, `tap` · `fill` 은 ref 대신 선택자(`~desc` · `id=…`)로, 띄어쓰기는 따옴표로 묶는다. 빈 줄 · `#` 줄은 건너뛴다. 끝나면 앱 첫 화면이어야 한다(크롤이 앱을 다시 띄워 거기서 경로를 누른다).
 
 ```
 # login.txt — MDA

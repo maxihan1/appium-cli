@@ -231,6 +231,25 @@ describe('그 밖의 명령', () => {
     expect(out.split('\n')[0]).toBe("Ran: await driver.$('id=com.shop:id/pw').setValue('a\\'b')");
   });
 
+  it('fill --submit 은 값을 넣은 뒤 performEditorAction done 을 보내고 Ran 줄을 하나 더 준다', async () => {
+    const out = await run(['-s=probe', 'fill', 'e4', 'pw', '--submit'], env);
+
+    expect(부른길().slice(0, 3)).toEqual(['POST /session/s-1/element', 'POST /session/s-1/element/el-9/value', 'POST /session/s-1/execute/sync']);
+    expect(JSON.parse((fetchMock.mock.calls[2] as [string, RequestInit])[1].body as string)).toEqual({ script: 'mobile: performEditorAction', args: [{ action: 'done' }] });
+    expect(out.split('\n').slice(0, 2)).toEqual([
+      "Ran: await driver.$('id=com.shop:id/pw').setValue('pw')",
+      "Ran: await driver.execute('mobile: performEditorAction', { action: 'done' })",
+    ]);
+    expect(out.split('\n')[2]).toMatch(/^- Snapshot: /);
+  });
+
+  it('hide-keyboard 는 hide_keyboard 를 부르고 hideKeyboard 코드와 새 화면을 준다', async () => {
+    const out = await run(['-s=probe', 'hide-keyboard'], env);
+
+    expect(부른길()).toEqual(['POST /session/s-1/appium/device/hide_keyboard', 'GET /session/s-1/source']);
+    expect(out.split('\n')[0]).toBe('Ran: await driver.hideKeyboard()');
+  });
+
   it('generate-locator 는 Appium 을 부르지 않고 선택자를 준다', async () => {
     expect(await run(['-s=probe', 'generate-locator', 'e4'], env)).toBe("driver.$('id=com.shop:id/pw')");
     expect(fetchMock).not.toHaveBeenCalled();

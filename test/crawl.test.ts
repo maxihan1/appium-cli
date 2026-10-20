@@ -199,6 +199,7 @@ beforeEach(async () => {
       const 손 = (body.actions as { actions: { y?: number }[] }[])[0]!.actions[0]!;
       누름((손.y! - 25) / 100 - 1);
     }
+    if (path.endsWith('/hide_keyboard')) 부름.push('hide-keyboard');
     if (path.endsWith('/back')) {
       부름.push('back');
       if (위 !== 'C' && 쌓임.length > 1) 쌓임.pop();
@@ -206,6 +207,10 @@ beforeEach(async () => {
     }
     if (path.endsWith('/execute/sync')) {
       const { script, args } = body as { script: string; args: { appId?: string; direction?: string }[] };
+      if (script === 'mobile: performEditorAction') {
+        부름.push(`${script} ${(args[0] as { action?: string }).action}`);
+        return 답(null);
+      }
       if (script === 'mobile: swipeGesture') {
         부름.push(`swipe ${args[0]!.direction}`);
         내림[위] = Math.min((내림[위] ?? 0) + 창크기, Math.max(0, (그래프()[위]!.목록?.length ?? 0) - 창크기));
@@ -728,6 +733,16 @@ describe('crawl --login', () => {
 
     await expect(run(['-s=c', 'crawl', '--login', 'login.txt'], env)).rejects.toThrow('로그인 스크립트를 돌린 뒤에도 로그인 화면이다');
     expect(읽기('summary.json')).toEqual({ 멈춘까닭: null, 상태들: ['로그아웃'], 예외: true });
+  });
+
+  it('스크립트에 fill --submit · hide-keyboard 를 쓸 수 있다', async () => {
+    writeFileSync('login.txt', 스크립트.replace('fill ~pass secret', 'fill ~pass secret --submit\nhide-keyboard'));
+
+    await run(['-s=c', 'crawl', '--login', 'login.txt', '--max', '40'], env);
+
+    const 비움 = 부름.indexOf('mobile: clearApp com.shop');
+    expect(부름.slice(비움, 비움 + 4)).toEqual(['mobile: clearApp com.shop', 'mobile: activateApp com.shop', 'mobile: performEditorAction done', 'hide-keyboard']);
+    expect(읽기('summary.json')).toMatchObject({ 상태들: ['로그아웃', 로그인판], 예외: false });
   });
 
   it.each([
