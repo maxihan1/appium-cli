@@ -54,6 +54,20 @@ describe('open', () => {
     expect(JSON.parse(init.body as string).capabilities.alwaysMatch['appium:app']).toBe('/apk/dev.apk');
   });
 
+  it('토큰이 있으면 URL 안 계정 대신 Bearer 로 보낸다', async () => {
+    await run(['-s=probe', 'snapshot'], { ...env, PLATFORM_APPIUM_TOKEN: 'pat_x' });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://farm:4723/wd/hub/session/s-1/source');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer pat_x');
+  });
+
+  it('--token 이 환경값보다 앞선다', async () => {
+    await run(['-s=probe', 'snapshot', '--token', 'pat_cli'], { ...env, PLATFORM_APPIUM_TOKEN: 'pat_env' });
+
+    expect(((fetchMock.mock.calls[0] as [string, RequestInit])[1].headers as Record<string, string>).Authorization).toBe('Bearer pat_cli');
+  });
+
   it('같은 이름이 열려 있으면 Appium 을 부르지 않고 던진다', async () => {
     await expect(run(['-s=probe', 'open'], env)).rejects.toThrow('이미 열려 있다');
     expect(fetchMock).not.toHaveBeenCalled();

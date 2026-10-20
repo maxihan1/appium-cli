@@ -43,6 +43,7 @@ ViewGroup id=com.shop:id/root [0,0][1080,2400] [ref=e1]
 | 값 | 옵션 | 환경값 |
 |----|------|--------|
 | Appium 주소 | `--url` | `PLATFORM_APPIUM_URL` (없으면 `http://127.0.0.1:4723`) |
+| 팜 토큰 (인증 켬일 때 · Bearer) | `--token` | `PLATFORM_APPIUM_TOKEN` |
 | apk 경로 (Appium 이 도는 컴퓨터 기준) | `--app` | `PLATFORM_APP` |
 | 폰 지정 | `--udid` | `PLATFORM_DEVICE_UDID` |
 

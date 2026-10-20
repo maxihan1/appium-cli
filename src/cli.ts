@@ -32,6 +32,7 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
   list                               열린 session 목록
 
 연결: --url 또는 PLATFORM_APPIUM_URL (없으면 http://127.0.0.1:4723)
+토큰: --token 또는 PLATFORM_APPIUM_TOKEN (팜이 인증을 켰을 때 — Bearer)
 앱:   --app 또는 PLATFORM_APP · 폰: --udid 또는 PLATFORM_DEVICE_UDID`;
 
 const 따옴표 = (s: string): string => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
@@ -78,6 +79,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
     options: {
       session: { type: 'string', short: 's' },
       url: { type: 'string' },
+      token: { type: 'string' },
       app: { type: 'string' },
       udid: { type: 'string' },
       raw: { type: 'boolean' },
@@ -99,7 +101,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
     return 이름들.length === 0 ? '열린 session 이 없다' : 이름들.join('\n');
   }
 
-  const c = 연결주소(values.url ?? env.PLATFORM_APPIUM_URL ?? 'http://127.0.0.1:4723');
+  const c = 연결주소(values.url ?? env.PLATFORM_APPIUM_URL ?? 'http://127.0.0.1:4723', values.token ?? env.PLATFORM_APPIUM_TOKEN);
 
   if (명령 === 'open') {
     const 있음 = await readFile(파일).then(() => true, () => false);

@@ -5,11 +5,14 @@ export interface 연결 {
   headers: Record<string, string>;
 }
 
-// test_platform runner `appium주소`(apps/runner/src/appSession.ts)와 같은 규칙이다
-export function 연결주소(raw: string): 연결 {
+// URL 안 계정 → Basic 은 test_platform runner `appium주소`(apps/runner/src/appSession.ts)와 같은 규칙이다.
+// 디바이스 팜은 계정 대신 개인 토큰을 Bearer 로 받는다 — 둘 다 오면 토큰이 앞선다
+export function 연결주소(raw: string, token?: string): 연결 {
   const url = new URL(raw);
   const headers: Record<string, string> = {};
-  if (url.username !== '') {
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  } else if (url.username !== '') {
     const 계정 = `${decodeURIComponent(url.username)}:${decodeURIComponent(url.password)}`;
     headers.Authorization = `Basic ${Buffer.from(계정).toString('base64')}`;
   }
