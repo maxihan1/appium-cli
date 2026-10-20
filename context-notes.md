@@ -185,3 +185,10 @@
 - **로그인 스크립트에도 받는다.** `hide-keyboard` 를 명령 목록에 더했고, `fill ~pw x --submit` 은 줄을 그대로 `run()` 에 넘기니 따로 할 일이 없다.
 - 확인 못 한 것(팜 꺼짐 — 127.0.0.1:4723 에 아무도 안 들음): `performEditorAction` 이 Appium Settings IME 로 잠깐 바꿔 보내는데 팜이 그 IME 를 허락하는지 · setValue 뒤 그 칸에 포커스가 남아 있는지(아니면 다른 칸에 done 이 간다) · 키보드가 없을 때 hide_keyboard 답(오류인지 false 인지) · 데모마켓 Compose `ImeAction.Done` 이 실제로 받는지.
 - 테스트 156개(153 + 3: fill --submit 요청 차례 · 몸 · Ran 두 줄 / hide-keyboard 요청 · Ran / 로그인 스크립트에 둘 다).
+
+## 2026-10-20 attach (CLI-F6-09) — 실기기 미확인(팜 꺼짐)
+- **`-s=<이름> attach <sessionId>` = POST /session 없이 session 파일만.** 웹 `playwright cli attach`(test_platform `tpx-cases/references/6-gates.md`) 자리. 먼저 `GET /session/{id}/source` 로 화면을 찍어 살아 있는지 보고, 된 뒤에야 파일을 적는다 — 끝난 session(404 `invalid session id`)이면 「session <id> 에 못 붙었다 — … 이미 끝난 session 이다」 를 내고 파일을 안 남긴다(open 은 파일을 먼저 적지만 attach 는 거꾸로). 번호는 `[\w-]+` 만(경로에 들어간다, artifacts 와 같다). 같은 이름이 있으면 open 과 같은 말로 거절하고 Appium 을 안 부른다. 파일에 `붙음: true`.
+- **close 는 DELETE 를 안 보낸다.** 남의 session(케이스가 아직 쥐고 있다)이라 파일만 지우고 「session <이름> 떼어냄 — <id> 는 열어 둔다(남의 session)」. **`.last` 도 안 적는다** — `artifacts` 기본값이 아직 도는 남의 session 을 가리키면 산출물이 `ready:false` 로 기다리다 빈손이 된다. 그 session 산출물은 케이스가 끝난 뒤 `artifacts <sessionId>` 로 받는다. 전에 있던 `.last` 는 건드리지 않는다.
+- **붙은 session 의 `logs` · `crawl` 은 `--force` 가 있어야 한다.** Appium 은 logcat 줄을 session 마다 한 번만 준다(F5-01) — CLI 가 읽으면 kit · `apis --session-id` 쪽에서 그 줄이 사라져 케이스 ↔ API 증적이 빠진다. crawl 은 시작에 logcat 을 버리고 앱을 다시 띄우기까지 한다(케이스 화면이 깨진다). 아예 막지 않고 `--force` 로 연 까닭: 케이스가 이미 멈췄거나 증적이 필요 없는 디버깅이면 쓸 수 있게. 다른 명령(tap · fill · back …)은 그대로 — 케이스 화면을 바꾸는 것은 디버깅의 뜻이다.
+- 확인 못 한 것(팜 꺼짐): 팜이 남의 토큰 · 다른 연결에서 연 session 의 source 를 이 토큰으로 내주는지(팜이 session 주인을 가리는지) · 케이스가 멈춘 동안 newCommandTimeout(300초) 안에 붙어야 하는지 · kit 쪽에서 session 번호를 어떻게 꺼내 주는지(test_platform 작업).
+- 테스트 161개(156 + 5: attach 요청 · 파일 / 같은 이름 거절 / 끝난 session · 파일 없음 / close 가 DELETE · .last 없음 / logs · crawl 거절 · --force).

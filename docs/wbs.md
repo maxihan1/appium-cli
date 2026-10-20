@@ -72,7 +72,8 @@ API 는 logcat 으로 본다 — QA 는 debug 빌드라 네트워크 로그가 �
   - 실측(로그아웃 판 6분): 13장 · 누름 43 · 재시작 17(40%, F5-05 71%) · 지름길 10(못 닿음 0) · 누름 하나 약 8.5초(F5-05 약 11초) · 장수 · 깊이(2걸음)는 F5-05 로그아웃 몫과 같음 · 남은 재시작은 시작 화면 back → 앱 밖으로 짐작(미확인) · MDA path 에 `↓` 없음(되풀이 이름 목록)
 - [x] `CLI-F6-08` `fill --submit` · `hide-keyboard` — playwright-cli `fill --submit` 처럼 입력 뒤 IME 동작(`mobile: performEditorAction`)을 보낸다. 키보드가 아래 버튼을 가리면 `hide-keyboard`
   - 근거 commit d10d266 · 2026-10-20 (실기기 미확인 — 팜 꺼짐)
-- [ ] `CLI-F6-09` `attach <sessionId>` — 남이 연 session(kit 케이스)에 CLI session 파일만 만들어 붙는다. test_platform 이 웹에서 실패한 케이스를 `playwright cli attach` 로 디버깅하는 자리(`tpx-cases/references/6-gates.md`). close 는 그 session 을 닫지 않고 파일만 지운다(남의 session)
+- [x] `CLI-F6-09` `attach <sessionId>` — 남이 연 session(kit 케이스)에 CLI session 파일만 만들어 붙는다. test_platform 이 웹에서 실패한 케이스를 `playwright cli attach` 로 디버깅하는 자리(`tpx-cases/references/6-gates.md`). close 는 그 session 을 닫지 않고 파일만 지운다(남의 session)
+  - 근거 commit b947071 · 2026-10-20 (실기기 미확인 — 팜 꺼짐)
 - [ ] `CLI-F6-10` `app restart` · `app clear` · `record start|stop` — crawl 안에만 있는 재시작 · 데이터 지우기를 명령으로. record 는 팜이 아닌 로컬 Appium 용(팜은 F6-02)
 
 ---
