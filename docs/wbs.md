@@ -74,7 +74,8 @@ API 는 logcat 으로 본다 — QA 는 debug 빌드라 네트워크 로그가 �
   - 근거 commit d10d266 · 2026-10-20 (실기기 미확인 — 팜 꺼짐)
 - [x] `CLI-F6-09` `attach <sessionId>` — 남이 연 session(kit 케이스)에 CLI session 파일만 만들어 붙는다. test_platform 이 웹에서 실패한 케이스를 `playwright cli attach` 로 디버깅하는 자리(`tpx-cases/references/6-gates.md`). close 는 그 session 을 닫지 않고 파일만 지운다(남의 session)
   - 근거 commit b947071 · 2026-10-20 (실기기 미확인 — 팜 꺼짐)
-- [ ] `CLI-F6-10` `app restart` · `app clear` · `record start|stop` — crawl 안에만 있는 재시작 · 데이터 지우기를 명령으로. record 는 팜이 아닌 로컬 Appium 용(팜은 F6-02)
+- [x] `CLI-F6-10` `app restart` · `app clear` · `record start|stop` — crawl 안에만 있는 재시작 · 데이터 지우기를 명령으로. record 는 팜이 아닌 로컬 Appium 용(팜은 F6-02)
+  - 근거 commit 52eca80 · 2026-10-20 (실기기 미확인 — 팜 꺼짐)
 
 ---
 
