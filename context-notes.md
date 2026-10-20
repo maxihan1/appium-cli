@@ -30,3 +30,9 @@
 - `find --regex` 에 `(?i)` 를 넣었다가 JS 정규식이 거절했다 → playwright-cli 처럼 `/식/i` 를 받게 했다.
 - 확인 못 한 것: 주소 없는 입력칸의 좌표 fill(element/active) — MDA 입력칸은 모두 desc 가 있었다.
 - 팜 쪽 실측: `/wd/hub/session` · `/api/devices/{serial}/hold` 모두 문서대로였다. W3C `element` · `click` · `value` · `actions` 아닌 `mobile: swipeGesture` · `back` · `screenshot` 도 팜을 거쳐 됐다.
+
+## 2026-10-20 내보내기 (CLI-F4-01)
+- 저장소 `github.com/maxihan1/appium-cli` **private** (사용자). 태그 `v0.1.0`.
+- 설치 실측: 맥 `npm i -D github:maxihan1/appium-cli#v0.1.0` 59초 · `node:22` 컨테이너 26초 — 둘 다 `prepare` 가 빌드하고 `npx appium-cli help` 가 돈다. 패키지에는 `dist` · `skill` · `README` 만 담긴다.
+- **private 이라 받는 쪽 git 에 GitHub 인증이 있어야 한다.** 컨테이너에서는 토큰을 `git config url."https://x-access-token:<토큰>@github.com/".insteadOf` 로 `ssh://git@github.com/` · `git@github.com:` · `https://github.com/` 세 꼴에 걸었다. test_platform Docker 빌드에 넣을 때 그쪽이 정할 일이다(빌드 인자 · secret mount — 토큰을 이미지 층에 남기지 않는다).
+- 설치가 느린 것(수십 초)은 `prepare` 가 vitest · typescript 를 받아서다. 느려서 문제가 되면 `dist` 를 태그에 싣는 쪽으로 바꾼다.

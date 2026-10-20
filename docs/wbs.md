@@ -33,7 +33,8 @@
 
 ### ④ 내보내기
 **무엇** 다른 저장소가 설치 명령 하나로 받게 GitHub 저장소로.
-- [ ] `CLI-F4-01` GitHub 저장소 · push · 태그 `v0.1.0` · README 한 쪽(설치 · 루프 · 연결 표). `npm i github:<계정>/appium-cli#v0.1.0` 이 `prepare` 로 빌드되는지를 맥과 `node:22` 컨테이너 둘에서 실측 (사용자: 저장소 이름)
+- [x] `CLI-F4-01` GitHub 저장소 · push · 태그 `v0.1.0` · README 한 쪽(설치 · 루프 · 연결 표). `npm i github:maxihan1/appium-cli#v0.1.0` 이 `prepare` 로 빌드되는지를 맥과 `node:22` 컨테이너 둘에서 실측 (사용자: 저장소 이름)
+  - 근거 commit 11a5074 · 태그 v0.1.0 · 2026-10-20 (private — 받는 쪽 git 에 인증 필요, context-notes.md)
 
 ---
 
