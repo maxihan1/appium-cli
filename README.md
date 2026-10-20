@@ -32,6 +32,15 @@ npx appium-cli release                         # 놓는다 — 팜이 깐 앱 ·
 ViewGroup desc="Login button" 클릭 [56,1458][1024,1583] [ref=e17]
 ```
 
+API 호출은 debug 빌드의 logcat(OkHttp `--> GET https://…`)에서 읽는다. 물음표 · `#` 뒤는 지운다.
+
+```bash
+npx appium-cli -s=probe logs                   # 첫 호출은 쌓인 줄을 버린다
+npx appium-cli -s=probe logs --api             # 그 뒤 새 API 줄만: GET https://host/path
+npx appium-cli apis --file logcat.txt          # 팜 logcat 파일 → [{"method","url","at"}]
+npx appium-cli apis --session-id <id>          # 남이 연 session 에서 같은 JSON
+```
+
 ## 연결
 
 | 값 | 옵션 | 환경값 |
@@ -41,6 +50,7 @@ ViewGroup desc="Login button" 클릭 [56,1458][1024,1583] [ref=e17]
 | 앱 — apk 경로 또는 URL | `--app` | `PLATFORM_APP` |
 | 폰 지정 | `--udid` | `PLATFORM_DEVICE_UDID` |
 | 팜 폰 고르기 (`os>=13,model=SM-*`) | `--filter` | — |
+| API 줄 꼴 (모임 둘: method · url) | `--api-pattern` | — |
 
 에이전트 지침은 [`skill/SKILL.md`](skill/SKILL.md), 결정과 실측은 [`context-notes.md`](context-notes.md), 진행판은 [`docs/wbs.md`](docs/wbs.md).
 

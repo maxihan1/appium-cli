@@ -32,6 +32,19 @@ npx appium-cli -s=probe close
 npx appium-cli release                            # 놓는다 — 팜이 깐 앱 · 앱 데이터를 지운다
 ```
 
+**API 호출은 logcat 으로 본다** — debug 빌드가 남기는 OkHttp 줄(`--> GET https://…`)만 잡는다. release 빌드는 0줄이다.
+
+```bash
+npx appium-cli -s=probe logs                      # open 뒤 한 번 — 쌓인 줄을 버리고 기준을 잡는다
+npx appium-cli -s=probe tap e3
+npx appium-cli -s=probe logs --api                # 그 사이 API: GET https://host/path (물음표 · # 뒤는 지운다)
+npx appium-cli -s=probe logs --grep "/okhttp/i"   # 줄 그대로 거르기
+npx appium-cli apis --file logcat.txt             # 팜 logcat 파일 → [{"method","url","at"}]
+npx appium-cli apis --session-id <id>             # 남이 연 session(kit 케이스)에서 같은 JSON
+```
+
+앱이 다른 꼴로 남기면 `--api-pattern '<식>'`(모임 둘: method · url)로 바꾼다.
+
 화면 한 줄이 요소 하나다.
 
 ```

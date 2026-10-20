@@ -4,7 +4,8 @@ import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 
-import { 연결주소, 부른다, 요소를찾는다, 좌표를누른다, type 연결 } from './appium.js';
+import { logcat을읽는다, 연결주소, 부른다, 요소를찾는다, 좌표를누른다, type 연결 } from './appium.js';
+import { apiLines } from './logcat.js';
 import { capabilities, center, locatorFor, parseSource, w3c, type 요소 } from './platform/android.js';
 
 const 폴더 = '.appium-cli';
@@ -23,6 +24,8 @@ interface 세션 {
   refs: Record<string, 요소>;
   width: number;
   height: number;
+  // 첫 logs 가 쌓인 줄을 버렸는지 — 그 뒤로는 Appium 이 새 줄만 준다
+  logcat읽음?: boolean;
 }
 
 export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
@@ -38,6 +41,8 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
   generate-locator <ref>             webdriverio 선택자
   close                              session 을 닫는다
   list                               열린 session 목록
+  logs [--grep <식>] [--api]          logcat 새 줄 (첫 호출은 쌓인 줄을 버린다) · --api 면 API 줄만 METHOD URL
+  apis --session-id <id> | --file <logcat.txt>   남이 연 session · 팜 logcat 파일에서 API 를 [{method,url,at}] JSON 으로
 
 디바이스 팜 (session 을 열기 전에 폰을 잡는다)
   devices                            팜의 폰과 상태
@@ -47,9 +52,24 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
 연결: --url 또는 PLATFORM_APPIUM_URL (없으면 http://127.0.0.1:4723)
 토큰: --token 또는 PLATFORM_APPIUM_TOKEN (팜이 인증을 켰을 때 — Bearer)
 앱:   --app 또는 PLATFORM_APP (팜은 URL — 받는 쪽이 팜 PC) · 폰: --udid 또는 PLATFORM_DEVICE_UDID
-팜 폰 고르기: --filter 'os>=13,model=SM-*' (쉼표는 AND)`;
+팜 폰 고르기: --filter 'os>=13,model=SM-*' (쉼표는 AND)
+API 꼴: --api-pattern <식> (모임 둘: method · url — 기본은 OkHttp '--> GET https://…'). 물음표 · # 뒤는 지운다`;
 
 const 따옴표 = (s: string): string => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+
+// playwright-cli 처럼 `/식/i` 로 플래그를 붙인다 — JS 정규식은 `(?i)` 를 모른다
+function 정규식(s: string): RegExp {
+  const 꼴 = /^\/(.+)\/([a-z]*)$/.exec(s);
+  return 꼴 ? new RegExp(꼴[1]!, 꼴[2]) : new RegExp(s);
+}
+
+function API꼴(s: string | undefined): RegExp | undefined {
+  if (s === undefined) return undefined;
+  const 식 = 정규식(s);
+  // 빈 글에 맞는 갈래를 붙여 모임 수를 센다
+  if (new RegExp(`${식.source}|`).exec('')!.length < 3) throw new Error('--api-pattern 에는 모임 둘(method · url)이 있어야 한다');
+  return 식;
+}
 
 async function 읽는다(파일: string): Promise<세션> {
   try {
@@ -125,6 +145,11 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       filename: { type: 'string' },
       minutes: { type: 'string' },
       filter: { type: 'string' },
+      grep: { type: 'string' },
+      api: { type: 'boolean' },
+      'api-pattern': { type: 'string' },
+      'session-id': { type: 'string' },
+      file: { type: 'string' },
     },
   });
   const [명령, ...인자] = positionals;
@@ -174,6 +199,14 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
     return `폰 ${serial} 놓음 — 팜이 깐 앱 · 앱 데이터를 정리한다`;
   }
 
+  // 케이스 ↔ API — kit 케이스가 연 session 이나 팜이 session 마다 남긴 logcat 파일을 읽는다. CLI session 파일은 안 쓴다
+  if (명령 === 'apis') {
+    const sid = values['session-id'];
+    const 줄 = values.file !== undefined ? (await readFile(values.file, 'utf8')).split(/\r?\n/) : sid !== undefined ? await logcat을읽는다(c, sid) : null;
+    if (줄 === null) throw new Error('apis 에 --session-id <id> 나 --file <logcat.txt> 가 필요하다');
+    return JSON.stringify(apiLines(줄, API꼴(values['api-pattern'])));
+  }
+
   if (명령 === 'open') {
     const 있음 = await readFile(파일).then(() => true, () => false);
     if (있음) throw new Error(`session ${이름} 이 이미 열려 있다 — close 부터 한다`);
@@ -203,11 +236,23 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       const 찾을것 = 인자[0];
       if (찾을것 === undefined) throw new Error('find 에 찾을 글자가 필요하다');
       if (s.snapshot === null) throw new Error('찍은 화면이 없다 — snapshot 부터 한다');
-      // playwright-cli 처럼 `/식/i` 로 플래그를 붙인다 — JS 정규식은 `(?i)` 를 모른다
-      const 꼴 = /^\/(.+)\/([a-z]*)$/.exec(찾을것);
-      const 식 = values.regex !== true ? null : 꼴 ? new RegExp(꼴[1]!, 꼴[2]) : new RegExp(찾을것);
+      const 식 = values.regex === true ? 정규식(찾을것) : null;
       const 줄 = (await readFile(s.snapshot, 'utf8')).split('\n').filter((l) => (식 ? 식.test(l) : l.includes(찾을것)));
       return 줄.length === 0 ? '찾은 줄 없음' : 줄.map((l) => l.trim()).join('\n');
+    }
+    case 'logs': {
+      // 읽은 줄은 Appium 이 다시 주지 않으니 식이 틀렸으면 읽기 전에 던진다
+      const 거름 = values.grep === undefined ? null : 정규식(values.grep);
+      const 꼴 = API꼴(values['api-pattern']);
+      let 줄 = await logcat을읽는다(c, sid);
+      if (s.logcat읽음 !== true) {
+        s.logcat읽음 = true;
+        await 적는다(파일, s);
+        return `쌓인 줄 ${줄.length}개를 버렸다 — 다음 logs 부터 새 줄만 낸다`;
+      }
+      if (거름 !== null) 줄 = 줄.filter((l) => 거름.test(l));
+      if (values.api === true || 꼴 !== undefined) 줄 = apiLines(줄, 꼴).map((a) => `${a.method} ${a.url}`);
+      return 줄.length === 0 ? '새 줄 없음' : 줄.join('\n');
     }
     case 'generate-locator': {
       const { loc, 겹침 } = 고른다(s, 인자[0]);

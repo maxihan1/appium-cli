@@ -210,3 +210,78 @@ describe('디바이스 팜', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe('logcat', () => {
+  const 줄 = (message: string): { timestamp: number; level: string; message: string } => ({ timestamp: 0, level: 'ALL', message });
+  const 쌓인줄 = [줄('10-20 10:00:00.000  1  1 I Boot: 옛 줄')];
+  const 새줄 = [
+    줄('10-20 10:07:55.318 18524 18524 I okhttp.OkHttpClient: --> GET https://api.shop/v1/items?token=abc&q=신발'),
+    줄('10-20 10:07:55.500 18524 18524 I okhttp.OkHttpClient: <-- 200 OK https://api.shop/v1/items (182ms)'),
+    줄('10-20 10:07:56.001 18524 18524 D Touch: tap'),
+    줄('10-20 10:07:56.100 18524 18524 I okhttp.OkHttpClient: --> POST https://api.shop/v1/cart#frag'),
+  ];
+  // se/log 를 부를 때마다 앞에서 하나씩 준다
+  function 로그답(...차례: unknown[][]): void {
+    const 기본 = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) => (url.endsWith('/se/log') ? 답(차례.shift() ?? []) : 기본(url, init)));
+  }
+
+  it('logs 첫 호출은 쌓인 줄을 버리고, 다음부터 새 줄을 그대로 낸다', async () => {
+    로그답(쌓인줄, 새줄, []);
+
+    expect(await run(['-s=probe', 'logs'], env)).toBe('쌓인 줄 1개를 버렸다 — 다음 logs 부터 새 줄만 낸다');
+    expect((await run(['-s=probe', 'logs'], env)).split('\n')).toEqual(새줄.map((e) => e.message));
+    expect(await run(['-s=probe', 'logs'], env)).toBe('새 줄 없음');
+
+    expect(부른길()).toEqual(Array(3).fill('POST /session/s-1/se/log'));
+    expect(JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string)).toEqual({ type: 'logcat' });
+  });
+
+  it('logs --grep 은 /식/i 꼴로 거른다', async () => {
+    로그답(쌓인줄, 새줄);
+    await run(['-s=probe', 'logs'], env);
+
+    expect(await run(['-s=probe', 'logs', '--grep', '/TOUCH/i'], env)).toBe('10-20 10:07:56.001 18524 18524 D Touch: tap');
+  });
+
+  it('logs --api 는 OkHttp 요청 줄만 METHOD URL 로, 물음표 · # 뒤는 지운다', async () => {
+    로그답(쌓인줄, 새줄);
+    await run(['-s=probe', 'logs'], env);
+
+    expect(await run(['-s=probe', 'logs', '--api'], env)).toBe('GET https://api.shop/v1/items\nPOST https://api.shop/v1/cart');
+  });
+
+  it('--api-pattern 으로 꼴을 바꾸고, 모임이 둘이 아니면 Appium 을 부르기 전에 던진다', async () => {
+    로그답(쌓인줄, [줄('10-20 10:07:57.000 1 1 I Net: req PUT https://api.shop/v1/me?x=1')]);
+    await run(['-s=probe', 'logs'], env);
+    fetchMock.mockClear();
+
+    await expect(run(['-s=probe', 'logs', '--api-pattern', 'req (\\w+)'], env)).rejects.toThrow('모임 둘');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await run(['-s=probe', 'logs', '--api-pattern', 'req (\\w+) (\\S+)'], env)).toBe('PUT https://api.shop/v1/me');
+  });
+
+  it('apis --file 은 팜 logcat 파일에서 [{method, url, at}] 를 낸다', async () => {
+    const { writeFile } = await import('node:fs/promises');
+    await writeFile('logcat.txt', `${새줄.map((e) => e.message).join('\r\n')}\n`);
+
+    expect(JSON.parse(await run(['apis', '--file', 'logcat.txt'], env))).toEqual([
+      { method: 'GET', url: 'https://api.shop/v1/items', at: '10-20 10:07:55.318' },
+      { method: 'POST', url: 'https://api.shop/v1/cart', at: '10-20 10:07:56.100' },
+    ]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('apis --session-id 는 CLI session 파일 없이 남의 session 을 읽고 쌓인 줄도 버리지 않는다', async () => {
+    로그답(새줄);
+
+    const out = JSON.parse(await run(['apis', '--session-id', 'kit-7'], env)) as { url: string }[];
+
+    expect(out.map((a) => a.url)).toEqual(['https://api.shop/v1/items', 'https://api.shop/v1/cart']);
+    expect(부른길()).toEqual(['POST /session/kit-7/se/log']);
+  });
+
+  it('apis 에 읽을 곳이 없으면 던진다', async () => {
+    await expect(run(['apis'], env)).rejects.toThrow('--session-id <id> 나 --file');
+  });
+});

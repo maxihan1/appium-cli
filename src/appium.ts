@@ -50,6 +50,12 @@ export async function 요소를찾는다(c: 연결, sid: string, using: string, 
   return v[ELEMENT] ?? v.ELEMENT!;
 }
 
+// Appium 은 session 마다 읽은 자리를 기억해 다음 호출엔 새 줄만 준다(실측: 첫 호출 10,000줄 — 버퍼 상한)
+export async function logcat을읽는다(c: 연결, sid: string): Promise<string[]> {
+  const v = (await 부른다(c, 'POST', `/session/${encodeURIComponent(sid)}/se/log`, { type: 'logcat' })) as { message: string }[] | null;
+  return (v ?? []).map((e) => e.message);
+}
+
 export function 좌표를누른다(c: 연결, sid: string, x: number, y: number): Promise<unknown> {
   return 부른다(c, 'POST', `/session/${sid}/actions`, {
     actions: [
