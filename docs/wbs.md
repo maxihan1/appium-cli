@@ -67,7 +67,9 @@ API 는 logcat 으로 본다 — QA 는 debug 빌드라 네트워크 로그가 �
   - 실측: `--cap` 받음(서버 닿음) · Compose id 는 `appium:disableIdLocatorAutocompletion=true` 가 있어야 `id=` 로 찾힌다(고침: 까닭 알림 · crawl 좌표 대체) · `attrs` 에 hint · 최대 글자 없음(EditText 29속성) · 팜 logcat.txt 24,222줄 전부 threadtime 시각 머리(헤더 2줄 빼고) · `apis --file` [] · 합성 OkHttp 줄 2개 뽑힘 · artifacts 5.2초(logcat 4.0MB · 영상 3개 22.8MB) · 좌표 fill CLI 갈래는 미확인(입력칸 id 가 다 하나뿐 — curl 로 element/active 첫 칸 1초 지연 확인 → 다시 묻기로 고침) · crawl 로그인 화면 1장 · 로그인 판은 clearApp 이 서버 주소를 지워 못 돎 · API 배정 건너뜀(Api.kt 수정 허락 없음) · 폰 IDLE
 - [x] `CLI-F6-06` crawl 스크롤 — 화면 후보를 다 누른 뒤 스크롤 가능한 요소가 있으면 위로 밀어 새 후보를 모은다(같은 후보가 다시 보이면 끝 · 화면당 상한). 경로 다시 누르기에 스크롤도 기록한다. 데모마켓 상품 목록 「더 불러오기」
   - 근거 commit e94c2fe · 2026-10-20 (가짜 앱 테스트만 — 실기기는 F6-07 과 함께)
-- [ ] `CLI-F6-07` crawl 재시작 줄이기 — 실측 누름의 약 70% 가 재시작(F5-05). back 이 엉뚱한 화면으로 가면 그 화면에서 목표까지 아는 가장 짧은 경로를 먼저 시도하고, 안 될 때만 재시작. 같은 시간에 장수 · 깊이가 느는지 MDA 로 잰다
+- [x] `CLI-F6-07` crawl 재시작 줄이기 — 실측 누름의 약 70% 가 재시작(F5-05). back 이 엉뚱한 화면으로 가면 그 화면에서 목표까지 아는 가장 짧은 경로를 먼저 시도하고, 안 될 때만 재시작. 같은 시간에 장수 · 깊이가 느는지 MDA 로 잰다
+  - 근거 commit 4893609 · 2026-10-20 (팜 폰 · MDA — 결과는 context-notes.md)
+  - 실측(로그아웃 판 6분): 13장 · 누름 43 · 재시작 17(40%, F5-05 71%) · 지름길 10(못 닿음 0) · 누름 하나 약 8.5초(F5-05 약 11초) · 장수 · 깊이(2걸음)는 F5-05 로그아웃 몫과 같음 · 남은 재시작은 시작 화면 back → 앱 밖으로 짐작(미확인) · MDA path 에 `↓` 없음(되풀이 이름 목록)
 - [ ] `CLI-F6-08` `fill --submit` · `hide-keyboard` — playwright-cli `fill --submit` 처럼 입력 뒤 IME 동작(`mobile: performEditorAction`)을 보낸다. 키보드가 아래 버튼을 가리면 `hide-keyboard`
 - [ ] `CLI-F6-09` `attach <sessionId>` — 남이 연 session(kit 케이스)에 CLI session 파일만 만들어 붙는다. test_platform 이 웹에서 실패한 케이스를 `playwright cli attach` 로 디버깅하는 자리(`tpx-cases/references/6-gates.md`). close 는 그 session 을 닫지 않고 파일만 지운다(남의 session)
 - [ ] `CLI-F6-10` `app restart` · `app clear` · `record start|stop` — crawl 안에만 있는 재시작 · 데이터 지우기를 명령으로. record 는 팜이 아닌 로컬 Appium 용(팜은 F6-02)
