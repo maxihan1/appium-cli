@@ -1,4 +1,4 @@
-// crawl 이 화면 셋 그래프를 도는지(새 화면 · 연결 · back · 재시작 + 경로 다시 누르기 · 다른 앱 · 상한 · 스크롤) · 안 누를 것 · 확인 창과 화면 키 규칙을 본다
+// crawl 이 화면 셋 그래프를 도는지(새 화면 · 연결 · back · 지름길 · 재시작 + 경로 다시 누르기 · 다른 앱 · 상한 · 스크롤) · 안 누를 것 · 확인 창과 화면 키 규칙을 본다
 
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -238,7 +238,7 @@ describe('crawl', () => {
     const out = await run(['-s=c', 'crawl'], env);
 
     expect(out).toMatch(
-      /^크롤: 로그아웃 3장 · 목록 3장 · 연결 3개 · API 4개 · 누름 6번 · 재시작 2번 · 확인 창 0번 · 저장본 없음 · 멈춘 까닭 다 봄 · [\d.]+초 · \.appium-cli\/crawl\/list\.json\n- Snapshot: /,
+      /^크롤: 로그아웃 3장 · 목록 3장 · 연결 3개 · API 4개 · 누름 6번 · 재시작 1번 · 지름길 1번\(못 닿음 0\) · 확인 창 0번 · 저장본 없음 · 멈춘 까닭 다 봄 · [\d.]+초 · \.appium-cli\/crawl\/list\.json\n- Snapshot: /,
     );
     const r = 결과();
     expect(r.app).toBe('com.shop');
@@ -255,21 +255,21 @@ describe('crawl', () => {
     ]);
   });
 
-  it('back 으로 돌아오고, 못 돌아오면 앱을 다시 띄워 경로를 다시 누르고, 다른 앱이면 back 하고, 같은 후보는 두 번 누르지 않는다', async () => {
+  it('back 으로 돌아오고, 못 돌아오면 아는 연결로 가거나 앱을 다시 띄워 경로를 다시 누르고, 다른 앱이면 back 하고, 같은 후보는 두 번 누르지 않는다', async () => {
     await run(['-s=c', 'crawl'], env);
 
-    // 'A to b' 둘째는 B 로 가는 경로 다시 누르기다. 화면 안에서 그대로인 누르기(same · c ok) 뒤에는 back 하지 않는다
+    // 'A to b' 둘째는 A 에서 B 로 가는 지름길이다. 화면 안에서 그대로인 누르기(same · c ok) 뒤에는 back 하지 않는다
     expect(눌림).toEqual(['A to b', 'A To C', 'A open web', 'A com.shop:id/same', 'A to b', 'B to c', 'C c ok']);
     expect(부름).toEqual([
       'back', // B → A
       'back', // C 에서 안 먹는다
+      'back', // C 에서 나가는 연결이 없어 back 한 번 — 또 안 먹는다
       'mobile: terminateApp com.shop',
-      'mobile: activateApp com.shop', // A 로 다시 (경로 없음)
+      'mobile: activateApp com.shop', // 그래서 A 로 다시 띄운다 (경로 없음)
       'back', // 다른 앱 → A
-      'mobile: terminateApp com.shop',
-      'mobile: activateApp com.shop', // B 로 가려고 다시 띄우고 'to b'
       'back', // C 에서 안 먹는다 — 다음 차례가 C 라 그대로 둔다
     ]);
+    expect([결과().restarts, 결과().지름길]).toEqual([1, { 닿음: 1, 못닿음: 0 }]);
   });
 
   it('--max 장에 닿으면 멈춘다', async () => {
@@ -367,16 +367,13 @@ describe('crawl', () => {
 
     await run(['-s=c', 'crawl'], env);
 
-    // r4 ~ r6 은 한 번, r7 은 두 번 민 뒤에 보인다. 마지막 'A r6' 은 R 로 가는 경로 다시 누르기다
+    // r4 ~ r6 은 한 번, r7 은 두 번 민 뒤에 보인다. 마지막 'A r6' 은 R 로 가는 지름길 — 목록 끝(r5 ~ r7)에 이미 보여 안 민다
     expect(눌림).toEqual(['A top', 'A r1', 'A r2', 'A r3', 'A r4', 'A r5', 'A r6', 'A r7', 'A r6']);
     expect(부름).toEqual([
       'swipe up', // r4 ~ r6
       'back', // R → A (목록 자리는 남는다)
       'swipe up', // r7
       'swipe up', // 끝 — 새 후보 없음
-      'mobile: terminateApp com.shop',
-      'mobile: activateApp com.shop',
-      'swipe up', // R 로 가는 경로의 ↓1
     ]);
     expect(결과().screens.map((s) => [s.key, s.path])).toEqual([
       ['app:.Main/a screen', []],
@@ -387,7 +384,7 @@ describe('crawl', () => {
     expect(JSON.parse(String(민몸))).toEqual({ script: 'mobile: swipeGesture', args: [{ left: 0, top: 200, width: 1080, height: 1790, direction: 'up', percent: 0.75 }] });
   });
 
-  it('back 뒤 목록이 처음으로 가는 앱이면 다시 밀어 누르고, 스크롤 뒤 화면 밑 화면도 앱을 다시 띄워 경로(↓ 포함)로 간다', async () => {
+  it('back 뒤 목록이 처음으로 가는 앱이면 다시 밀어 누르고, 스크롤 뒤 화면 · 그 밑 화면은 아는 연결(↓ 포함)로 간다', async () => {
     돌아옴자리버림 = true;
     화면들 = {
       A: { 틀: { desc: 'a screen' }, 제목: 'Home', 버튼: [], 길: { r4: 'S' }, 목록: 줄들(6) },
@@ -397,26 +394,88 @@ describe('crawl', () => {
 
     await run(['-s=c', 'crawl'], env);
 
-    expect(눌림).toEqual(['A r1', 'A r2', 'A r3', 'A r4', 'A r5', 'A r6', 'A r4', 'S to t', 'A r4', 'S to t']);
+    expect(눌림).toEqual(['A r1', 'A r2', 'A r3', 'A r4', 'A r5', 'A r6', 'A r4', 'S to t', 'S to t']);
     expect(부름).toEqual([
       'swipe up', // r4 ~ r6
       'back', // S → A, 목록이 처음으로
       'swipe up', // r5 를 찾아 다시 민다 — 재시작 없이
-      'swipe up', // 끝
-      'mobile: terminateApp com.shop',
-      'mobile: activateApp com.shop',
-      'swipe up', // S 로: ↓1 · r4
-      'back', // T → S
-      'mobile: terminateApp com.shop',
-      'mobile: activateApp com.shop',
-      'swipe up', // T 로: ↓1 · r4 · to t
+      'swipe up', // 끝 — r4 ~ r6 이 보인 채라 S 로 가는 ↓1 은 안 민다
+      'back', // T → S — T 로는 S 에서 'to t' 하나
     ]);
     expect(결과().screens.map((s) => [s.key, s.path])).toEqual([
       ['app:.Main/a screen', []],
       ['app:.Main/s screen', ['↓1', 'r4']],
       ['app:.Main/t screen', ['↓1', 'r4', 'to t']],
     ]);
-    expect(결과().restarts).toBe(2);
+    expect([결과().restarts, 결과().지름길]).toEqual([0, { 닿음: 2, 못닿음: 0 }]);
+  });
+
+  it('back 이 서랍이 아니라 바탕 화면으로 가도 바탕에서 아는 연결로 서랍 · 서랍 항목 화면에 간다 — 재시작 없이', async () => {
+    // 서랍 항목은 서랍을 닫으며 간다('>') — back 하면 서랍이 아니라 A (MDA 서랍 2026-10-20 실측)
+    화면들 = {
+      A: { 틀: { desc: 'a screen' }, 제목: 'Home', 버튼: [{ desc: 'open menu' }], 길: { 'open menu': 'M' } },
+      M: { 틀: { desc: 'menu' }, 제목: 'Menu', 버튼: [{ desc: 'item x' }, { desc: 'item y' }], 길: { 'item x': '>E', 'item y': '>F' } },
+      E: { 틀: { desc: 'x screen' }, 제목: 'Ex', 버튼: [], 길: {} },
+      F: { 틀: { desc: 'y screen' }, 제목: 'Why', 버튼: [], 길: {} },
+    };
+
+    await run(['-s=c', 'crawl'], env);
+
+    expect(눌림).toEqual([
+      'A open menu',
+      'A open menu', // M 으로 (지름길)
+      'M item x',
+      'A open menu', // back 이 A 로 가서 M 으로 다시 (지름길)
+      'M item y',
+      'A open menu', // X 로: A → M → X
+      'M item x',
+      'A open menu', // Y 로: X 에서 나가는 연결이 없어 back 한 번 → A → M → Y
+      'M item y',
+    ]);
+    expect(부름).toEqual(['back', 'back', 'back', 'back']);
+    expect(결과().screens.map((s) => [s.key, s.path])).toEqual([
+      ['app:.Main/a screen', []],
+      ['app:.Main/menu', ['open menu']],
+      ['app:.Main/x screen', ['open menu', 'item x']],
+      ['app:.Main/y screen', ['open menu', 'item y']],
+    ]);
+    expect([결과().restarts, 결과().지름길]).toEqual([0, { 닿음: 4, 못닿음: 0 }]);
+  });
+
+  it('back 이 조상 화면으로 가면 그 뒤 경로만 누른다', async () => {
+    // K 의 'to d' 는 K 를 닫으며 간다 — D 에서 back 하면 B
+    화면들 = {
+      A: { 틀: { desc: 'a screen' }, 제목: 'Home', 버튼: [{ desc: 'to b' }], 길: { 'to b': 'B' } },
+      B: { 틀: { desc: 'b screen' }, 제목: 'Bee', 버튼: [{ desc: 'to c' }], 길: { 'to c': 'K' } },
+      K: { 틀: { desc: 'c screen' }, 제목: 'Sea', 버튼: [{ desc: 'to d' }], 길: { 'to d': '>D' } },
+      D: { 틀: { desc: 'd screen' }, 제목: 'Dee', 버튼: [{ desc: 'd ok' }], 길: {} },
+    };
+
+    await run(['-s=c', 'crawl'], env);
+
+    expect(결과().screens.at(-1)!.path).toEqual(['to b', 'to c', 'to d']);
+    // D 의 'd ok' 앞 'B to c' · 'C to d' — D 의 path 에서 조상 B 뒤 걸음만
+    expect(눌림).toEqual(['A to b', 'A to b', 'B to c', 'B to c', 'K to d', 'B to c', 'K to d', 'D d ok']);
+    expect(부름.filter((x) => x.startsWith('mobile:'))).toEqual([]);
+    expect([결과().restarts, 결과().지름길]).toEqual([0, { 닿음: 3, 못닿음: 0 }]);
+  });
+
+  it('지름길 걸음이 어긋나면(목록이 지나 내려가 있다) 앱을 다시 띄워 경로(↓ 포함)로 간다', async () => {
+    화면들 = {
+      A: { 틀: { desc: 'a screen' }, 제목: 'Home', 버튼: [], 길: { r4: 'S' }, 목록: 줄들(9) },
+      S: { 틀: { desc: 's screen' }, 제목: 'Ess', 버튼: [], 길: {} },
+    };
+
+    await run(['-s=c', 'crawl'], env);
+
+    // 목록 끝(r7 ~ r9)에서 S 로 — r4 가 위라 위로 밀어도 안 보인다 → 다시 띄워 ↓1 · r4
+    expect(눌림.slice(-2)).toEqual(['A r9', 'A r4']);
+    expect(부름.slice(-5)).toEqual(['swipe up', 'swipe up', 'mobile: terminateApp com.shop', 'mobile: activateApp com.shop', 'swipe up']);
+    expect(결과().screens.map((s) => [s.key, s.path])).toEqual([
+      ['app:.Main/a screen', []],
+      ['app:.Main/s screen', ['↓1', 'r4']],
+    ]);
+    expect([결과().restarts, 결과().지름길]).toEqual([1, { 닿음: 0, 못닿음: 1 }]);
   });
 
   it.each([

@@ -57,6 +57,7 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
                                      시작 때 --out 의 지난 결과(로그아웃/ · 로그인/ · 결과 json)만 지운다 (뿌리 · 홈 · 작업 폴더나 그 위는 거절)
                                      위험 글자(삭제 · 결제 …) · --exclude 에 맞는 이름은 안 누른다 (--exclude 는 여러 번)
                                      화면 후보를 다 누르면 목록(스크롤 요소)을 위로 밀어 새 후보도 누른다 (화면당 다섯 번 · 누름 30 번까지)
+                                     못 돌아오면 이미 본 연결로 가 보고, 안 되면 앱을 다시 띄워 경로를 다시 누른다
                                      --login 이면 로그아웃 판 뒤 앱 데이터를 지우고 스크립트로 로그인해 로그인:<역할>(기본 일반 회원) 판을 돈다
                                      로그아웃은 로그인 판에서 다시 로그인할 수 있을 때만 누른다 (다시 로그인은 세 번까지)
                                      스크립트는 한 줄에 tap · fill · back · swipe 하나 (선택자는 따옴표로: fill '~Username input field' bob)
@@ -381,7 +382,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       const 판셈 = [...new Set(r.screens.map((x) => x.상태))].map((상) => `${상} ${r.screens.filter((x) => x.상태 === 상).length}장`).join(' · ');
       const 로그인셈 = 로그인 === undefined ? '' : ` · 다시 로그인 ${r.다시로그인}번(앱 비우기 ${r.앱비우기 ?? '-'})`;
       return (
-        `크롤: ${판셈} · 목록 ${목록수}장 · 연결 ${r.links.length}개 · API ${API수}개 · 누름 ${r.presses}번 · 재시작 ${r.restarts}번 · 확인 창 ${창수}번${로그인셈}` +
+        `크롤: ${판셈} · 목록 ${목록수}장 · 연결 ${r.links.length}개 · API ${API수}개 · 누름 ${r.presses}번 · 재시작 ${r.restarts}번 · 지름길 ${r.지름길.닿음}번(못 닿음 ${r.지름길.못닿음}) · 확인 창 ${창수}번${로그인셈}` +
         ` · ${저장본} · 멈춘 까닭 ${r.stopped ?? '다 봄'} · ${초}초 · ${목록}\n${찍음}`
       );
     }

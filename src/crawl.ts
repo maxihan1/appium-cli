@@ -165,6 +165,8 @@ export interface 크롤결과 {
   links: { 상태: 상태; from: string; to: string; via: string }[];
   presses: number;
   restarts: number;
+  // 앱을 다시 띄우기 전에 지금 화면에서 아는 연결로 목표까지 가 본 수 — 닿음 · 못 닿음(그 뒤 재시작)
+  지름길: { 닿음: number; 못닿음: number };
   // 로그인 판에서 로그인풀림 · 로그아웃 뒤 다시 로그인한 수 (처음 로그인은 안 센다)
   다시로그인: number;
   // 로그인 앞에 앱을 어떻게 비웠나 — 팜이 clearApp 을 막으면 terminateApp 으로 끄기만 한다
@@ -196,7 +198,7 @@ export interface 로그인방법 {
 
 /**
  * 지금 화면(시작 화면)부터 넓이 우선으로 돈다. 화면마다 후보를 하나씩 누르고, 새 화면이면 남긴 뒤 back 으로 돌아온다.
- * 못 돌아왔으면 다음 누르기 전에 앱을 다시 띄우고(terminateApp · activateApp) 그 화면의 path 를 다시 누른다. 다른 앱이 뜨면 back.
+ * 못 돌아왔으면 다음 누르기 전에 지금 화면에서 아는 연결로 가 보고, 안 되면 앱을 다시 띄우고(terminateApp · activateApp) 그 화면의 path 를 다시 누른다. 다른 앱이 뜨면 back.
  * API 는 시작할 때 쌓인 logcat 을 버리고, 누르기 바로 전에 읽은 줄은 지금 화면 몫, 누른 뒤 읽은 줄은 간 화면(안 바뀌었으면 지금 화면) 몫이다.
  * 로그인이 있으면 로그아웃 판을 돈 뒤 앱을 비우고(clearApp) 로그인해 로그인 판을 돈다 — 장수 · 시간은 판마다 나눈다(test_platform 몫).
  * 로그인 판에서 로그인 화면이 뜨면 다시 로그인해 그 버튼을 한 번 더 누르고, 또 뜨면 로그인 칸이 있는 화면으로 남긴다. 로그아웃은 다시 로그인할 수 있을 때만 누른다
@@ -213,7 +215,7 @@ export async function crawl(
   let 지금 = await 본다(c, sid);
   const app = 지금.앱;
   const 상태들: 상태[] = 로그인 === undefined ? ['로그아웃'] : ['로그아웃', `로그인:${로그인.역할}`];
-  const r: 크롤결과 = { app, screens: [], links: [], presses: 0, restarts: 0, 다시로그인: 0, dialogs: {}, stopped: null, 상태들: [] };
+  const r: 크롤결과 = { app, screens: [], links: [], presses: 0, restarts: 0, 지름길: { 닿음: 0, 못닿음: 0 }, 다시로그인: 0, dialogs: {}, stopped: null, 상태들: [] };
 
   // logcat 을 못 읽는 서버(권한 · 로컬 Appium)면 API 없이 돈다
   const API봄 = await logcat을읽는다(c, sid).then(() => true, () => false);
@@ -254,15 +256,13 @@ export async function crawl(
     return true;
   };
 
-  const 되돌린다 = async (목표: 본화면): Promise<boolean> => {
-    r.restarts++;
-    await 앱에('mobile: terminateApp');
-    await 앱에('mobile: activateApp');
-    지금 = await 본다(c, sid, 지금.화면.글);
-    for (const 이름 of 목표.path) {
+  // 걸음(path 조각)을 지금 화면부터 누른다. `↓n` 은 다음 이름이 보일 때까지 위로 n 번까지 민다 — back 뒤 목록 자리가 남아 이미 보이면 안 민다
+  const 걷는다 = async (걸음: readonly string[]): Promise<boolean> => {
+    for (const [i, 이름] of 걸음.entries()) {
       const 내림 = 스크롤걸음.exec(이름);
       if (내림 !== null) {
-        for (let k = 0; k < Number(내림[1]); k++) if (!(await 민다())) return false;
+        const 보임 = (): boolean => 후보들(지금.화면, 뺄).some((h) => h.이름 === 걸음[i + 1]);
+        for (let k = 0; k < Number(내림[1]) && !보임(); k++) if (!(await 민다())) return false;
         continue;
       }
       const x = 후보들(지금.화면, 뺄).find((h) => h.이름 === 이름);
@@ -271,7 +271,53 @@ export async function crawl(
       지금 = await 본다(c, sid, 지금.화면.글);
       await 창을닫는다(false, false);
     }
-    return 지금.정보.key === 목표.key;
+    return true;
+  };
+
+  const 되돌린다 = async (목표: 본화면): Promise<boolean> => {
+    r.restarts++;
+    await 앱에('mobile: terminateApp');
+    await 앱에('mobile: activateApp');
+    지금 = await 본다(c, sid, 지금.화면.글);
+    return (await 걷는다(목표.path)) && 지금.정보.key === 목표.key;
+  };
+
+  // 아는 연결 — 판마다 from 화면에서 걸음(`↓n` · 후보 이름)을 누르면 to 화면이었다. 지름길로 못 간 연결은 뺀다
+  const 연결들: { 상태: 상태; from: string; to: string; 걸음: string[] }[] = [];
+
+  // 지금 화면에서 목표까지 아는 연결로 가장 짧은 길(넓이 우선 — 지금 화면이 목표 path 의 조상이면 남은 path 와 같다). 없으면 undefined
+  const 길찾기 = (목표: 본화면): typeof 연결들 | undefined => {
+    if (지금.앱 !== app) return undefined;
+    const 앞길 = new Map<string, typeof 연결들>([[지금.정보.key, []]]);
+    // Map 은 돌면서 더한 항목도 차례로 돈다 — 그대로 넓이 우선
+    for (const [키, 길] of 앞길) {
+      for (const l of 연결들) if (l.상태 === 목표.상태 && l.from === 키 && !앞길.has(l.to)) 앞길.set(l.to, [...길, l]);
+    }
+    return 앞길.get(목표.key);
+  };
+
+  /**
+   * 목표 화면으로 간다 — 아는 연결로 가는 길을 먼저 누르고 화면마다 키를 본다. 길이 없으면(나가는 연결이 없는 끝 화면 등) back 한 번 뒤 다시 찾는다.
+   * 길이 없거나 어긋나면 앱을 다시 띄워 path 를 다시 누른다. back 이 엉뚱한 화면(MDA 서랍 항목 → products)으로 가는 앱에서 재시작을 줄인다(F5-05 실측 누름의 70%)
+   * ponytail: 길이 길어도 재시작보다 먼저 누른다 — 누름 하나가 재시작보다 비싼 앱이 나오면 path 길이와 견준다
+   */
+  const 간다 = async (목표: 본화면): Promise<boolean> => {
+    let 길 = 길찾기(목표);
+    if (길 === undefined && 지금.앱 === app) {
+      await 부른다(c, 'POST', `/session/${sid}/back`, {});
+      지금 = await 본다(c, sid, 지금.화면.글);
+      길 = 길찾기(목표);
+    }
+    if (길 === undefined) return 되돌린다(목표);
+    for (const l of 길) {
+      if (!(await 걷는다(l.걸음)) || 지금.앱 !== app || 지금.정보.key !== l.to) {
+        연결들.splice(연결들.indexOf(l), 1);
+        r.지름길.못닿음++;
+        return 되돌린다(목표);
+      }
+    }
+    r.지름길.닿음++;
+    return true;
   };
 
   // 앱 데이터를 지우고(팜이 막으면 앱만 끄고) 띄운 뒤 로그인 스크립트. 로그인하며 찍힌 API 는 어느 화면 몫도 아니라 버린다
@@ -319,7 +365,7 @@ export async function crawl(
      * 그래도 없으면 앱을 다시 띄워 경로 + 깊이 번 민다
      */
     const 보이게 = async (목표: 본화면, 깊이: number, 이름들: readonly string[]): Promise<후보 | undefined | null> => {
-      if (지금.정보.key !== 목표.key && !(await 되돌린다(목표))) return null;
+      if (지금.정보.key !== 목표.key && !(await 간다(목표))) return null;
       let x = 찾는다(이름들);
       if (깊이 === 0 || x !== undefined) return x;
       for (let k = 0; k < 깊이 && x === undefined && (await 민다()); k++) x = 찾는다(이름들);
@@ -333,7 +379,7 @@ export async function crawl(
       if (시간끝()) return true;
       if (목표.탈퇴흐름) continue;
       // 못 가는 화면(경로 글자가 바뀌었다)은 건너뛴다
-      if (지금.정보.key !== 목표.key && !(await 되돌린다(목표))) continue;
+      if (지금.정보.key !== 목표.key && !(await 간다(목표))) continue;
       // 깊이 = 그 후보가 보이기까지 목록을 민 수. 다 누르면 목록을 한 번 더 밀어 이 화면에서 처음 보는 이름을 잇는다 — 새 이름이 없거나 상한이면 끝
       const 할일 = 후보들(지금.화면, 뺄, 로그인남음()).slice(0, 화면누름상한).map((x) => ({ 이름: x.이름, 깊이: 0 }));
       const 목록있음 = 목록(지금.화면) !== undefined; // 없으면 밀려고 다시 띄우지 않는다
@@ -380,13 +426,16 @@ export async function crawl(
         }
         if (지금.앱 === app && 뒤.key !== 목표.key) {
           r.links.push({ 상태, from: 목표.key, to: 뒤.key, via: `버튼 「${이름.slice(0, 60)}」` });
+          const 걸음 = [...(깊이 > 0 ? [`↓${깊이}`] : []), 이름];
+          // 로그아웃은 지름길로 안 누른다(로그인이 풀린다)
+          if (!로그아웃) 연결들.push({ 상태, from: 목표.key, to: 뒤.key, 걸음 });
           // 로그아웃으로 간 화면은 남기지 않는다(test_platform 과 같다)
           if (!로그아웃 && !r.screens.some((s) => s.상태 === 상태 && s.key === 뒤.key)) {
             if (r.screens.filter((s) => s.상태 === 상태).length >= 몫.장) {
               r.stopped ??= 판이름(`--max ${상한.장}장`);
               return true;
             }
-            const 새 = 남길화면(지금, [...목표.path, ...(깊이 > 0 ? [`↓${깊이}`] : []), 이름], 탈퇴말인가(이름), 상태);
+            const 새 = 남길화면(지금, [...목표.path, ...걸음], 탈퇴말인가(이름), 상태);
             r.screens.push(새);
             // 로그인 판의 로그인 칸 화면은 남기기만 하고 안 돈다
             if (!풀림) 대기.push(새);
