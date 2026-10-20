@@ -28,7 +28,8 @@
 
 ### ③ 실기기 확인
 **무엇** 가짜 fetch 가 아니라 이 맥 팜의 폰(R3CR10TCVCD)으로 끝까지 한 번.
-- [ ] `CLI-F3-01` 실기기 E2E — `hold` → MDA apk `open` → 로그인 뒤 두 번째 화면까지 `tap` · `fill` → 두 번째 화면 요소에 `generate-locator` · 그 요소를 선택자 경로(`Ran: await driver.$(…)`)로 `tap` 성공 → `close` · `release`. 실측해서 `context-notes.md` 에 적을 것: 팜이 `newCommandTimeout` 300 을 받는지(팜 기본 60초) · 액션 뒤 화면이 전환 중에 찍히는지 · 화면 파일 크기. 나온 작은 고칠 것은 이 태스크에서 고친다 (사용자: apk 경로 · 폰이 비어 있을 것)
+- [x] `CLI-F3-01` 실기기 E2E — `hold` → MDA apk `open` → 로그인 뒤 두 번째 화면까지 `tap` · `fill` → 두 번째 화면 요소에 `generate-locator` · 그 요소를 선택자 경로(`Ran: await driver.$(…)`)로 `tap` 성공 → `close` · `release`. 실측해서 `context-notes.md` 에 적을 것: 팜이 `newCommandTimeout` 300 을 받는지(팜 기본 60초) · 액션 뒤 화면이 전환 중에 찍히는지 · 화면 파일 크기. 나온 작은 고칠 것은 이 태스크에서 고친다 (사용자: apk 경로 · 폰이 비어 있을 것)
+  - 근거 commit 60541c4 · 2026-10-20 (팜 폰 R3CR10TCVCD · MDA — 결과는 context-notes.md)
 
 ### ④ 내보내기
 **무엇** 다른 저장소가 설치 명령 하나로 받게 GitHub 저장소로.
