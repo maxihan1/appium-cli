@@ -64,6 +64,24 @@ npx appium-cli -s=probe crawl --out ../data/crawl --keep ../data/kept/index.json
 
 안 누르는 것 — 로그아웃(늘) · 12자 이하 이름이나 resource-id 에 위험 글자(삭제 · 결제 · 담기 · 해지 · delete · remove …)가 든 버튼 · `--exclude` 식에 맞는 이름(desc → id → 글자). 탈퇴 버튼은 누르되 그 뒤 화면(이름에 탈퇴가 든 화면도)에서는 아무것도 안 누른다. 누른 뒤 Android 확인 창이 뜨면 탈퇴 · 되돌릴 수 없음 경고 · 입력칸이면 back, 아니면 확인 버튼 하나를 누른다(`index.json` `dialogs`). 아이디 칸 + 비밀번호 칸이 같이 뜬 화면은 `로그인풀림: true`.
 
+## 화면 키 · 라이브러리
+
+케이스 ↔ 화면을 잇는 재료다 — 앱 화면 파일(page object)에 화면 주소 값으로 지금 화면 키를 적는다. 키는 crawl 이 남기는 것과 같은 규칙이다.
+
+```bash
+npx appium-cli -s=probe screen                 # app:.Main/login screen · Login   (이름이 없으면 키만)
+```
+
+test_platform kit · 러너 · 스캐너는 CLI 를 띄우지 않고 같은 규칙을 부른다.
+
+```ts
+import { screenKey, parseSource, apiLines } from 'appium-cli';
+
+screenKey(xml, '.Main');        // { key: 'app:.Main/login screen', name: 'Login', structFp: '3f2a…' } — xml 은 GET /session/:id/source, '.Main' 은 current_activity
+parseSource(xml);               // { 글, refs, width, height } — snapshot 파일과 같은 글 · ref 표
+apiLines(logcatLines);          // [{ method, url, at }] — apis --file 과 같다 (둘째 인자로 꼴 바꾸기)
+```
+
 ## 연결
 
 | 값 | 옵션 | 환경값 |

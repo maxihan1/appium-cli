@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { 가라앉기 } from '../src/appium.js';
 import { run } from '../src/cli.js';
 import { type 크롤결과, 화면을가린다 } from '../src/crawl.js';
+import { screenKey } from '../src/index.js';
 import { parseSource } from '../src/platform/android.js';
 
 interface 버튼 {
@@ -350,6 +351,30 @@ describe('crawl 결과 파일', () => {
     await expect(run(['-s=c', 'crawl'], env)).rejects.toThrow(/^크롤이 도중에 멈췄다 — Appium 이 HTTP 404 로 답했다: gone.*\.appium-cli\/crawl\/list\.json 에 남겼다$/);
     expect(읽기('summary.json')).toEqual({ 멈춘까닭: null, 상태들: [], 예외: true });
     expect(읽기<목록줄[]>('list.json').map((x) => x.틀)).toEqual([A, B]);
+  });
+});
+
+describe('screen · screenKey', () => {
+  it('screen 명령은 지금 화면 키 · 이름을 한 줄로 내고, crawl 이 남기는 키와 같다', async () => {
+    쌓임 = ['A', 'B'];
+    expect(await run(['-s=c', 'screen'], env)).toBe('app:.Main/b screen · Bee');
+
+    쌓임 = ['A'];
+    await run(['-s=c', 'crawl'], env);
+    expect(결과().screens.map((s) => `${s.key} · ${s.name}`)).toContain('app:.Main/b screen · Bee');
+  });
+
+  it('이름이 없으면 키만 낸다', async () => {
+    화면들 = { A: { 틀: { desc: 'blank' }, 제목: '', 버튼: [], 길: {} } };
+    expect(await run(['-s=c', 'screen'], env)).toBe('app:.Main/blank');
+  });
+
+  it('내보낸 screenKey 는 crawl 이 남긴 키 · 이름 · 구조 지문과 같다', async () => {
+    await run(['-s=c', 'crawl'], env);
+
+    const 남김 = 결과().screens.map(({ key, name, structFp }) => ({ key, name, structFp }));
+    const 셈 = (['A', 'B', 'C'] as const).map((k) => screenKey(XML(기본[k]!.틀, 기본[k]!.제목, 기본[k]!.버튼), '.Main'));
+    expect(셈).toEqual(남김);
   });
 });
 

@@ -47,7 +47,7 @@ export interface 화면정보 {
 
 /**
  * 화면 키 `app:<activity>/<화면 이름표>` — 이름표는 본문 컨테이너의 desc → resource-id, 없으면 구조 지문.
- * test_platform `screen_record.url` 칸에 그대로 들어가니 다음 실행에도 같은 화면이면 같은 값이어야 한다. F5-06 이 이것을 내보낸다.
+ * test_platform `screen_record.url` 칸에 그대로 들어가니 다음 실행에도 같은 화면이면 같은 값이어야 한다. `src/index.ts` `screenKey` 가 이것을 내보낸다.
  * name 은 컨테이너(없으면 화면 전체) 안 첫 TextView 글자 — 머리글 어림
  */
 export function 화면을가린다(h: 화면, activity: string): 화면정보 {
@@ -94,13 +94,14 @@ async function 누른다(c: 연결, sid: string, h: 화면, el: 요소): Promise
   await 좌표를누른다(c, sid, p.x, p.y);
 }
 
-interface 지금 {
+export interface 지금 {
   화면: 화면;
   정보: 화면정보;
   앱: string;
 }
 
-async function 본다(c: 연결, sid: string, 앞?: string): Promise<지금> {
+// screen 명령도 이것으로 본다 — 크롤이 남기는 키와 같은 값이어야 해서
+export async function 본다(c: 연결, sid: string, 앞?: string): Promise<지금> {
   const 화면 = await 화면을기다린다(c, sid, 앞);
   const activity = String(await 부른다(c, 'GET', `/session/${sid}/appium/device/current_activity`));
   const 앱 = String(await 부른다(c, 'GET', `/session/${sid}/appium/device/current_package`));

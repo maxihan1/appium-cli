@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import { logcat을읽는다, 연결주소, 부른다, 요소를찾는다, 좌표를누른다, 화면을기다린다, type 연결 } from './appium.js';
-import { crawl } from './crawl.js';
+import { crawl, 본다 } from './crawl.js';
 import { 결과파일들, 저장본모양 } from './crawl-out.js';
 import { apiLines } from './logcat.js';
 import { capabilities, center, locatorFor, w3c, type 요소 } from './platform/android.js';
@@ -41,6 +41,7 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
   back                               뒤로
   screenshot [--filename <파일>]       스크린샷
   generate-locator <ref>             webdriverio 선택자
+  screen                             지금 화면 키 · 이름 (crawl 과 같은 키 — 앱 화면 파일의 화면 주소 값)
   close                              session 을 닫는다
   list                               열린 session 목록
   logs [--grep <식>] [--api]          logcat 새 줄 (첫 호출은 쌓인 줄을 버린다) · --api 면 API 줄만 METHOD URL
@@ -268,6 +269,10 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
         `크롤: 로그아웃 ${r.screens.length}장 · 연결 ${r.links.length}개 · API ${API수}개 · 누름 ${r.presses}번 · 재시작 ${r.restarts}번 · 확인 창 ${창수}번` +
         ` · ${저장본} · 멈춘 까닭 ${r.stopped ?? '다 봄'} · ${초}초 · ${목록}\n${찍음}`
       );
+    }
+    case 'screen': {
+      const { key, name } = (await 본다(c, sid)).정보;
+      return name === '' ? key : `${key} · ${name}`;
     }
     case 'generate-locator': {
       const { loc, 겹침 } = 고른다(s, 인자[0]);

@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { 가라앉기 } from '../src/appium.js';
 import { run } from '../src/cli.js';
+import * as 입구 from '../src/index.js';
 
 import { 화면XML } from './fixture.js';
 
@@ -275,6 +276,17 @@ describe('logcat', () => {
       { method: 'POST', url: 'https://api.shop/v1/cart', at: '10-20 10:07:56.100' },
     ]);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('내보낸 apiLines 는 apis --file 과 같은 값을 낸다', async () => {
+    const { writeFile } = await import('node:fs/promises');
+    await writeFile('logcat.txt', 새줄.map((e) => e.message).join('\n'));
+
+    expect(입구.apiLines(새줄.map((e) => e.message))).toEqual(JSON.parse(await run(['apis', '--file', 'logcat.txt'], env)));
+  });
+
+  it('라이브러리는 screenKey · parseSource · apiLines 만 낸다', () => {
+    expect(Object.keys(입구).sort()).toEqual(['apiLines', 'parseSource', 'screenKey']);
   });
 
   it('apis --session-id 는 CLI session 파일 없이 남의 session 을 읽고 쌓인 줄도 버리지 않는다', async () => {
