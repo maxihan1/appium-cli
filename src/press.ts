@@ -44,7 +44,7 @@ export function 확인버튼고르기(이름들: readonly string[]): number | nu
 
 export type 창결과 = '탈퇴' | '경고' | '입력' | '누름' | '남음';
 
-const 입력칸 = (e: 요소): boolean => /EditText|AutoCompleteTextView/.test(e.cls);
+export const 입력칸인가 = (e: 요소): boolean => /EditText|AutoCompleteTextView/.test(e.cls);
 
 /**
  * Android 확인 창(AlertDialog — 버튼 `android:id/button1` 확인 · `button2` 취소 · `button3` 가운데)이면 무엇을 할지, 창이 아니면 null.
@@ -58,10 +58,10 @@ export function 확인창(els: readonly 요소[], 탈퇴로 = false): { 결과: 
   const 글 = els.map((e) => `${e.text} ${e.desc}`).join(' ');
   if (탈퇴로 || 탈퇴말.test(글)) return { 결과: '탈퇴' };
   if (되돌릴수없나(글)) return { 결과: '경고' };
-  if (els.some(입력칸)) return { 결과: '입력' };
+  if (els.some(입력칸인가)) return { 결과: '입력' };
   const i = 확인버튼고르기(버튼들.map((e) => e.text || e.desc));
   return i === null ? { 결과: '남음' } : { 결과: '누름', 버튼: 버튼들[i]! };
 }
 
 /** 로그인 풀림 — 아이디 칸(비밀번호가 아닌 입력칸)과 비밀번호 칸이 같이 뜬 화면 (test_platform `로그인풀렸나` 의 칸 판정) */
-export const 로그인화면인가 = (els: readonly 요소[]): boolean => els.some((e) => e.비밀번호) && els.some((e) => 입력칸(e) && !e.비밀번호);
+export const 로그인화면인가 = (els: readonly 요소[]): boolean => els.some((e) => e.비밀번호) && els.some((e) => 입력칸인가(e) && !e.비밀번호);

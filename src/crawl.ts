@@ -2,11 +2,14 @@
 
 import { createHash } from 'node:crypto';
 
-import { 가라앉기, 부른다, 요소를찾는다, 좌표를누른다, 화면을기다린다, type 연결 } from './appium.js';
+import { logcat을읽는다, 가라앉기, 부른다, 요소를찾는다, 좌표를누른다, 화면을기다린다, type 연결 } from './appium.js';
+import { 기록글 } from './crawl-out.js';
+import { apiLines } from './logcat.js';
 import { center, locatorFor, w3c, type 요소, type 화면 } from './platform/android.js';
 import { 로그인화면인가, 안누를까닭, 탈퇴말인가, 확인창, type 창결과 } from './press.js';
 
 const 화면누름상한 = 30; // 버튼이 수백 개인 화면 하나가 시간을 다 먹지 않게 (test_platform 과 같다)
+const API상한 = 200; // 화면 하나에서 — test_platform 서버 상한과 같다(PUT …/screens)
 
 /** 구조 지문 — test_platform `지문`(authoring-crawl-rules.ts)과 같다. 따옴표 안 글자 · 숫자를 빼고 짜임만 본다 */
 export function 지문(글: string): string {
@@ -111,6 +114,10 @@ export interface 본화면 extends 화면정보 {
   탈퇴흐름?: true;
   // 아이디 칸 + 비밀번호 칸 — 다시 로그인은 F5-05 가 한다
   로그인풀림?: true;
+  // 화면 파일 글(`# <키>` · 입력칸 줄 · 화면 글) — test_platform `record`
+  record: string;
+  // 이 화면으로 온 누르기 · 이 화면에서 누르기 전까지 logcat 에 찍힌 API (물음표 뒤는 지움)
+  apis: { method: string; url: string }[];
 }
 
 export interface 크롤결과 {
@@ -122,23 +129,41 @@ export interface 크롤결과 {
   // 누른 뒤 뜬 Android 확인 창을 어떻게 했나 — 누름(확인) · 탈퇴 · 경고 · 입력 · 남음(누를 버튼 없음)은 back
   dialogs: Partial<Record<창결과, number>>;
   stopped: string | null;
+  // 도중에 던진 오류 — 본 것까지는 남긴다
+  예외?: string;
 }
 
-const 표 = (x: 지금, 탈퇴로: boolean): Pick<본화면, '탈퇴흐름' | '로그인풀림'> => ({
+const 남길화면 = (x: 지금, path: string[], 탈퇴로: boolean): 본화면 => ({
+  ...x.정보,
+  path,
   ...(탈퇴로 || 탈퇴말인가(x.정보.name) || 탈퇴말인가(x.정보.key) ? { 탈퇴흐름: true } : {}),
   ...(로그인화면인가(Object.values(x.화면.refs)) ? { 로그인풀림: true } : {}),
+  record: 기록글(x.정보.key, x.화면),
+  apis: [],
 });
 
 /**
  * 지금 화면(시작 화면)부터 넓이 우선으로 돈다. 화면마다 후보를 하나씩 누르고, 새 화면이면 남긴 뒤 back 으로 돌아온다.
- * 못 돌아왔으면 다음 누르기 전에 앱을 다시 띄우고(terminateApp · activateApp) 그 화면의 path 를 다시 누른다. 다른 앱이 뜨면 back
+ * 못 돌아왔으면 다음 누르기 전에 앱을 다시 띄우고(terminateApp · activateApp) 그 화면의 path 를 다시 누른다. 다른 앱이 뜨면 back.
+ * API 는 시작할 때 쌓인 logcat 을 버리고, 누르기 바로 전에 읽은 줄은 지금 화면 몫, 누른 뒤 읽은 줄은 간 화면(안 바뀌었으면 지금 화면) 몫이다
  */
-export async function crawl(c: 연결, sid: string, 상한: { 장: number; 분: number }, 뺄: readonly RegExp[] = []): Promise<크롤결과> {
+export async function crawl(c: 연결, sid: string, 상한: { 장: number; 분: number }, 뺄: readonly RegExp[] = [], API꼴?: RegExp): Promise<크롤결과> {
   const 마감 = Date.now() + 상한.분 * 60_000;
   let 지금 = await 본다(c, sid);
   const app = 지금.앱;
-  const r: 크롤결과 = { app, screens: [{ ...지금.정보, path: [], ...표(지금, false) }], links: [], presses: 0, restarts: 0, dialogs: {}, stopped: null };
+  const r: 크롤결과 = { app, screens: [남길화면(지금, [], false)], links: [], presses: 0, restarts: 0, dialogs: {}, stopped: null };
   const 대기 = [...r.screens];
+
+  // logcat 을 못 읽는 서버(권한 · 로컬 Appium)면 API 없이 돈다
+  const API봄 = await logcat을읽는다(c, sid).then(() => true, () => false);
+  const API모은다 = async (key: string): Promise<void> => {
+    if (!API봄) return;
+    const 줄 = await logcat을읽는다(c, sid).catch((): string[] => []);
+    const s = r.screens.find((x) => x.key === key);
+    for (const { method, url } of apiLines(줄, API꼴)) {
+      if (s !== undefined && s.apis.length < API상한 && !s.apis.some((a) => a.method === method && a.url === url)) s.apis.push({ method, url });
+    }
+  };
 
   // 누른 뒤 확인 창이 떴으면 확인 버튼 하나를 누르거나 back 으로 닫는다. 경로 다시 누르기에서는 세지 않는다
   const 창을닫는다 = async (탈퇴로: boolean, 셈: boolean): Promise<void> => {
@@ -173,46 +198,54 @@ export async function crawl(c: 연결, sid: string, 상한: { 장: number; 분: 
     return true;
   };
 
-  for (let 목표 = 대기.shift(); 목표 !== undefined; 목표 = 대기.shift()) {
-    if (시간끝()) return r;
-    if (목표.탈퇴흐름) continue;
-    // 못 가는 화면(경로 글자가 바뀌었다)은 건너뛴다
-    if (지금.정보.key !== 목표.key && !(await 되돌린다(목표))) continue;
-    for (const { 이름 } of 후보들(지금.화면, 뺄).slice(0, 화면누름상한)) {
+  // 도중에 죽어도(session 끊김) 본 것까지는 남기게 오류를 결과에 싣는다
+  try {
+    for (let 목표 = 대기.shift(); 목표 !== undefined; 목표 = 대기.shift()) {
       if (시간끝()) return r;
-      if (지금.정보.key !== 목표.key && !(await 되돌린다(목표))) break;
-      // 다시 띄운 뒤면 위치가 달라졌을 수 있어 지금 화면에서 다시 찾는다
-      const x = 후보들(지금.화면, 뺄).find((h) => h.이름 === 이름);
-      if (x === undefined) continue;
-      const 앞 = 지금;
-      await new Promise((ok) => setTimeout(ok, 가라앉기.간격_ms));
-      try {
-        await 누른다(c, sid, 앞.화면, x.el);
-      } catch {
-        continue; // 그사이 사라진 요소
-      }
-      r.presses++;
-      지금 = await 본다(c, sid, 앞.화면.글);
-      await 창을닫는다(탈퇴말인가(이름), true);
-      const 뒤 = 지금.정보;
-      if (지금.앱 === app && 뒤.key !== 목표.key) {
-        r.links.push({ from: 목표.key, to: 뒤.key, via: `버튼 「${이름.slice(0, 60)}」` });
-        if (!r.screens.some((s) => s.key === 뒤.key)) {
-          if (r.screens.length >= 상한.장) {
-            r.stopped = `--max ${상한.장}장`;
-            return r;
+      if (목표.탈퇴흐름) continue;
+      // 못 가는 화면(경로 글자가 바뀌었다)은 건너뛴다
+      if (지금.정보.key !== 목표.key && !(await 되돌린다(목표))) continue;
+      for (const { 이름 } of 후보들(지금.화면, 뺄).slice(0, 화면누름상한)) {
+        if (시간끝()) return r;
+        if (지금.정보.key !== 목표.key && !(await 되돌린다(목표))) break;
+        // 다시 띄운 뒤면 위치가 달라졌을 수 있어 지금 화면에서 다시 찾는다
+        const x = 후보들(지금.화면, 뺄).find((h) => h.이름 === 이름);
+        if (x === undefined) continue;
+        const 앞 = 지금;
+        await new Promise((ok) => setTimeout(ok, 가라앉기.간격_ms));
+        await API모은다(목표.key); // back · 다시 띄우기로 이 화면에 오며 찍힌 것
+        try {
+          await 누른다(c, sid, 앞.화면, x.el);
+        } catch {
+          continue; // 그사이 사라진 요소
+        }
+        r.presses++;
+        지금 = await 본다(c, sid, 앞.화면.글);
+        await 창을닫는다(탈퇴말인가(이름), true);
+        const 뒤 = 지금.정보;
+        const 간곳 = 지금.앱 === app ? 뒤.key : 목표.key;
+        if (지금.앱 === app && 뒤.key !== 목표.key) {
+          r.links.push({ from: 목표.key, to: 뒤.key, via: `버튼 「${이름.slice(0, 60)}」` });
+          if (!r.screens.some((s) => s.key === 뒤.key)) {
+            if (r.screens.length >= 상한.장) {
+              r.stopped = `--max ${상한.장}장`;
+              return r;
+            }
+            const 새 = 남길화면(지금, [...목표.path, 이름], 탈퇴말인가(이름));
+            r.screens.push(새);
+            대기.push(새);
           }
-          const 새 = { ...뒤, path: [...목표.path, 이름], ...표(지금, 탈퇴말인가(이름)) };
-          r.screens.push(새);
-          대기.push(새);
+        }
+        await API모은다(간곳);
+        // 화면 안에서만 바뀐 누르기(창 · 펼치기)도 back 으로 닫는다. 구조가 그대로면 둔다
+        if (지금.앱 !== app || 뒤.key !== 앞.정보.key || 뒤.structFp !== 앞.정보.structFp) {
+          await 부른다(c, 'POST', `/session/${sid}/back`, {});
+          지금 = await 본다(c, sid, 지금.화면.글);
         }
       }
-      // 화면 안에서만 바뀐 누르기(창 · 펼치기)도 back 으로 닫는다. 구조가 그대로면 둔다
-      if (지금.앱 !== app || 뒤.key !== 앞.정보.key || 뒤.structFp !== 앞.정보.structFp) {
-        await 부른다(c, 'POST', `/session/${sid}/back`, {});
-        지금 = await 본다(c, sid, 지금.화면.글);
-      }
     }
+  } catch (e) {
+    r.예외 = e instanceof Error ? e.message : String(e);
   }
   return r;
 }

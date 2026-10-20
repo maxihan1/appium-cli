@@ -1,11 +1,12 @@
 // 앱용 playwright-cli. 명령 하나를 Appium 요청으로 바꾸고, session 상태는 .appium-cli/<이름>.json 에 둔다
 
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import { logcat을읽는다, 연결주소, 부른다, 요소를찾는다, 좌표를누른다, 화면을기다린다, type 연결 } from './appium.js';
 import { crawl } from './crawl.js';
+import { 결과파일들, 저장본모양 } from './crawl-out.js';
 import { apiLines } from './logcat.js';
 import { capabilities, center, locatorFor, w3c, type 요소 } from './platform/android.js';
 
@@ -44,7 +45,9 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
   list                               열린 session 목록
   logs [--grep <식>] [--api]          logcat 새 줄 (첫 호출은 쌓인 줄을 버린다) · --api 면 API 줄만 METHOD URL
   apis --session-id <id> | --file <logcat.txt>   남이 연 session · 팜 logcat 파일에서 API 를 [{method,url,at}] JSON 으로
-  crawl [--max 50] [--minutes 10] [--exclude <식>]   지금 화면부터 눌러 가며 화면 키 · 연결을 .appium-cli/crawl.json 에 (--max 는 100 장까지)
+  crawl [--max 50] [--minutes 10] [--exclude <식>] [--out <폴더>] [--keep <저장본>]
+                                     지금 화면부터 눌러 가며 화면 파일 · list · index · links · apis · summary.json 을
+                                     --out(기본 .appium-cli/crawl)에 (--max 는 100 장까지). --keep 이면 저장본과 같음 · 바뀜 · 새 화면
                                      로그아웃 · 위험 글자(삭제 · 결제 …) · --exclude 에 맞는 이름은 안 누른다 (--exclude 는 여러 번)
 
 디바이스 팜 (session 을 열기 전에 폰을 잡는다)
@@ -130,6 +133,8 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       file: { type: 'string' },
       max: { type: 'string' },
       exclude: { type: 'string', multiple: true },
+      out: { type: 'string' },
+      keep: { type: 'string' },
     },
   });
   const [명령, ...인자] = positionals;
@@ -240,16 +245,29 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       const 분 = Number(values.minutes ?? 10);
       if (!(분 > 0)) throw new Error('--minutes 는 0 보다 큰 수다');
       const 뺄 = (values.exclude ?? []).map(정규식);
+      const 꼴 = API꼴(values['api-pattern']);
+      const 출력 = values.out ?? join(폴더, 'crawl');
+      // 저장본(에이전트가 화면 기록에서 만든 kept/index.json) — 없거나 틀린 파일은 없는 것으로 (test_platform 과 같다)
+      const 저장 = values.keep === undefined ? null : await readFile(values.keep, 'utf8').then((t) => 저장본모양(JSON.parse(t))).catch(() => null);
       const 시작 = Date.now();
-      const r = await crawl(c, sid, { 장, 분 }, 뺄);
-      const 결과 = join(폴더, 'crawl.json');
-      await writeFile(결과, JSON.stringify(r, null, 2));
+      const r = await crawl(c, sid, { 장, 분 }, 뺄, 꼴);
+      const { 파일들, 저장본 } = 결과파일들(r, '로그아웃', 저장, new Date().toISOString().slice(0, 10));
+      for (const [경로, 글] of 파일들) {
+        await mkdir(dirname(join(출력, 경로)), { recursive: true });
+        await writeFile(join(출력, 경로), 글);
+      }
+      const 목록 = join(출력, 'list.json');
+      if (r.예외 !== undefined) throw new Error(`크롤이 도중에 멈췄다 — ${r.예외}. 본 것까지는 ${목록} 에 남겼다`);
       // 크롤이 화면을 옮겼으니 ref 표를 지금 화면으로 바꾼다
       const 찍음 = await 찍는다(c, s, false);
       await 적는다(파일, s);
-      const 멈춤 = r.stopped === null ? '' : ` (멈춤: ${r.stopped})`;
       const 초 = ((Date.now() - 시작) / 1000).toFixed(1);
-      return `크롤 — 화면 ${r.screens.length}장 · 연결 ${r.links.length}개 · 누름 ${r.presses}번 · 재시작 ${r.restarts}번 · ${초}초${멈춤} → ${결과}\n${찍음}`;
+      const API수 = r.screens.reduce((n, x) => n + x.apis.length, 0);
+      const 창수 = Object.values(r.dialogs).reduce((n, x) => n + x, 0);
+      return (
+        `크롤: 로그아웃 ${r.screens.length}장 · 연결 ${r.links.length}개 · API ${API수}개 · 누름 ${r.presses}번 · 재시작 ${r.restarts}번 · 확인 창 ${창수}번` +
+        ` · ${저장본} · 멈춘 까닭 ${r.stopped ?? '다 봄'} · ${초}초 · ${목록}\n${찍음}`
+      );
     }
     case 'generate-locator': {
       const { loc, 겹침 } = 고른다(s, 인자[0]);

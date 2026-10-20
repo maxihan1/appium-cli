@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { 요소 } from '../src/platform/android.js';
 import { 되돌릴수없나, 로그인화면인가, 안누를까닭, 탈퇴말인가, 확인버튼고르기, 확인창 } from '../src/press.js';
 
-const 요소 = (x: Partial<요소>): 요소 => ({ cls: 'Button', text: '', desc: '', id: '', bounds: '', 누름: true, 비밀번호: false, ...x });
+const 요소 = (x: Partial<요소>): 요소 => ({ cls: 'Button', text: '', desc: '', id: '', bounds: '', 누름: true, 비밀번호: false, 꺼짐: false, ...x });
 
 describe('안누를까닭', () => {
   it.each([

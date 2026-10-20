@@ -45,7 +45,7 @@ npx appium-cli apis --session-id <id>             # 남이 연 session(kit 케�
 
 앱이 다른 꼴로 남기면 `--api-pattern '<식>'`(모임 둘: method · url)로 바꾼다.
 
-**앱 구조 훑기** — `npx appium-cli -s=probe crawl --max 50 --minutes 10` 이 화면 키 · 화면 연결을 `.appium-cli/crawl.json` 에 남긴다. 앱 첫 화면에서 시작한다(돌아오지 못하면 앱을 다시 띄워 경로를 다시 누른다). 로그아웃 · 위험 글자(삭제 · 결제 · 담기 …) 버튼은 안 누르고, 탈퇴 흐름 화면에서는 아무것도 안 누르고, 확인 창은 경고 · 탈퇴 · 입력칸이면 back 한다. 더 뺄 버튼은 `--exclude '<식>'`(여러 번, `/식/i` 꼴).
+**앱 구조 훑기** — `npx appium-cli -s=probe crawl --max 50 --minutes 10` 이 화면마다 파일 · `list.json` · `links.json` · `apis.json` · `summary.json` 을 test_platform 크롤러 꼴로 `.appium-cli/crawl/`(`--out <폴더>`)에 남긴다. 이전 저장본이 있으면 `--keep <저장본 json>` — 화면마다 같음 · 바뀜 · 새 화면을 `list.json` 과 요약 줄에 낸다. 앱 첫 화면에서 시작한다(돌아오지 못하면 앱을 다시 띄워 경로를 다시 누른다). 로그아웃 · 위험 글자(삭제 · 결제 · 담기 …) 버튼은 안 누르고, 탈퇴 흐름 화면에서는 아무것도 안 누르고, 확인 창은 경고 · 탈퇴 · 입력칸이면 back 한다. 더 뺄 버튼은 `--exclude '<식>'`(여러 번, `/식/i` 꼴).
 
 화면 한 줄이 요소 하나다.
 

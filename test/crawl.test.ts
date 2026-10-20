@@ -1,6 +1,6 @@
 // crawl 이 화면 셋 그래프를 도는지(새 화면 · 연결 · back · 재시작 + 경로 다시 누르기 · 다른 앱 · 상한) · 안 누를 것 · 확인 창과 화면 키 규칙을 본다
 
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -17,6 +17,8 @@ interface 버튼 {
   text?: string;
   cls?: string;
   password?: boolean;
+  // 누르면 logcat 에 찍히는 API 경로
+  api?: string;
 }
 
 // 버튼 i 는 [0,(i+1)*100][100,(i+1)*100+50] — 가운데 y 로 몇 번째인지 되찾는다
@@ -38,8 +40,13 @@ function XML(틀: { desc?: string; id?: string }, 제목: string, 버튼들: 버
 // A → B(~to b) · A → C(글자만 — 좌표) · A → 다른 앱 · A 안에서 그대로(id) · B → C · C 에서는 back 이 안 먹는다
 type 그래프 = Record<string, { 틀: { desc?: string; id?: string }; 제목: string; 버튼: 버튼[]; 길: Record<string, string> }>;
 const 기본: 그래프 = {
-  A: { 틀: { desc: 'a screen' }, 제목: 'Home', 버튼: [{ desc: 'to b' }, { text: 'To C' }, { desc: 'open web' }, { id: 'com.shop:id/same' }], 길: { 'to b': 'B', 'To C': 'C', 'open web': 'X' } },
-  B: { 틀: { desc: 'b screen' }, 제목: 'Bee', 버튼: [{ desc: 'to c' }], 길: { 'to c': 'C' } },
+  A: {
+    틀: { desc: 'a screen' },
+    제목: 'Home',
+    버튼: [{ desc: 'to b', api: 'b-load' }, { text: 'To C' }, { desc: 'open web', api: 'web' }, { id: 'com.shop:id/same', api: 'same-tap' }],
+    길: { 'to b': 'B', 'To C': 'C', 'open web': 'X' },
+  },
+  B: { 틀: { desc: 'b screen' }, 제목: 'Bee', 버튼: [{ desc: 'to c', api: 'c-load' }], 길: { 'to c': 'C' } },
   C: { 틀: { id: 'com.shop:id/c_root' }, 제목: 'Sea', 버튼: [{ text: 'c ok' }], 길: {} },
   X: { 틀: { desc: 'web' }, 제목: 'Chrome', 버튼: [], 길: {} },
 };
@@ -93,11 +100,13 @@ const 답 = (value: unknown): Response => new Response(JSON.stringify({ value })
 let 쌓임: string[] = [];
 let 눌림: string[] = [];
 let 부름: string[] = [];
+let 로그: string[] = [];
 
 function 누름(i: number): void {
   const 위 = 쌓임.at(-1)!;
   const b = 화면들[위]!.버튼[i]!;
   눌림.push(`${위} ${이름(b)}`);
+  if (b.api !== undefined) 로그.push(`10-20 10:07:55.318  4242  4300 I okhttp.OkHttpClient: --> GET https://api.shop/${b.api}?token=t1`);
   const 다음 = 화면들[위]!.길[이름(b)];
   if (다음 === '<') 쌓임.pop();
   else if (다음 !== undefined) 쌓임.push(다음);
@@ -108,12 +117,18 @@ beforeEach(async () => {
   process.chdir(mkdtempSync(join(tmpdir(), 'appium-cli-')));
   쌓임 = ['A'];
   화면들 = 기본;
+  로그 = ['10-20 10:00:00.000  4242  4300 I okhttp.OkHttpClient: --> GET https://api.shop/old'];
   fetchMock.mockReset();
   fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
     const path = url.replace('http://farm:4723/wd/hub', '');
     const body = init.body === undefined ? {} : (JSON.parse(init.body as string) as Record<string, unknown>);
     const 위 = 쌓임.at(-1)!;
     if (path === '/session') return 답({ sessionId: 's-1' });
+    if (path.endsWith('/se/log')) {
+      const 줄 = 로그.map((message) => ({ timestamp: 0, level: 'ALL', message }));
+      로그 = [];
+      return 답(줄);
+    }
     if (path.endsWith('/source')) {
       const h = 화면들[위]!;
       return 답(XML(h.틀, h.제목, h.버튼));
@@ -148,13 +163,16 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const 결과 = (): 크롤결과 => JSON.parse(readFileSync('.appium-cli/crawl.json', 'utf8')) as 크롤결과;
+const 읽기 = <T>(이름: string): T => JSON.parse(readFileSync(join('.appium-cli/crawl', 이름), 'utf8')) as T;
+const 결과 = (): 크롤결과 => 읽기<크롤결과>('index.json');
 
 describe('crawl', () => {
   it('화면 셋을 키 · 이름 · 경로로 남기고 화면 연결을 버튼 이름으로 잇는다', async () => {
     const out = await run(['-s=c', 'crawl'], env);
 
-    expect(out).toMatch(/^크롤 — 화면 3장 · 연결 3개 · 누름 6번 · 재시작 2번 · [\d.]+초 → \.appium-cli\/crawl\.json\n- Snapshot: /);
+    expect(out).toMatch(
+      /^크롤: 로그아웃 3장 · 연결 3개 · API 4개 · 누름 6번 · 재시작 2번 · 확인 창 0번 · 저장본 없음 · 멈춘 까닭 다 봄 · [\d.]+초 · \.appium-cli\/crawl\/list\.json\n- Snapshot: /,
+    );
     const r = 결과();
     expect(r.app).toBe('com.shop');
     expect(r.stopped).toBeNull();
@@ -190,7 +208,7 @@ describe('crawl', () => {
   it('--max 장에 닿으면 멈춘다', async () => {
     const out = await run(['-s=c', 'crawl', '--max', '2'], env);
 
-    expect(out).toContain('(멈춤: --max 2장)');
+    expect(out).toContain('멈춘 까닭 --max 2장');
     expect(결과().screens.map((s) => s.key)).toEqual(['app:.Main/a screen', 'app:.Main/b screen']);
   });
 
@@ -244,6 +262,94 @@ describe('crawl', () => {
     fetchMock.mockClear();
     await expect(run(['-s=c', 'crawl', '--max', '101'], env)).rejects.toThrow('--max 는 1 ~ 100 장이다');
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('crawl 결과 파일', () => {
+  interface 목록줄 { 주소: string; 이름: string; 상태: string; 파일: string; 틀: string; 지문: string; 글자지문: string; 저장본?: string; 저장기록?: string }
+  const A = 'app:.Main/a screen';
+  const B = 'app:.Main/b screen';
+  const C = 'app:.Main/com.shop:id/c_root';
+
+  it('test_platform 크롤러 칸 이름으로 화면 파일 · list · links · apis · summary 를 낸다', async () => {
+    await run(['-s=c', 'crawl'], env);
+
+    const 목록 = 읽기<목록줄[]>('list.json');
+    expect(목록.map((x) => [x.주소, x.틀, x.이름, x.상태, x.파일])).toEqual([
+      [A, A, 'Home', '로그아웃', '로그아웃/001.yml'],
+      [B, B, 'Bee', '로그아웃', '로그아웃/002.yml'],
+      [C, C, 'Sea', '로그아웃', '로그아웃/003.yml'],
+    ]);
+    // test_platform 화면검사 — 16진 64자 이하
+    for (const x of 목록) expect([x.지문, x.글자지문]).toEqual([expect.stringMatching(/^[0-9a-f]{1,64}$/), expect.stringMatching(/^[0-9a-f]{1,64}$/)]);
+    expect(Object.keys(목록[0]!).sort()).toEqual(['글자지문', '상태', '이름', '주소', '지문', '틀', '파일']);
+    expect(readFileSync('.appium-cli/crawl/로그아웃/002.yml', 'utf8')).toMatch(/^# app:\.Main\/b screen\n화면 1080x2400 · 요소 \d+개\n.*desc="to c"/s);
+    expect(읽기('links.json')).toEqual([
+      { 상태: '로그아웃', 틀: A, 연결: [{ to: B, via: '버튼 「to b」' }, { to: C, via: '버튼 「To C」' }] },
+      { 상태: '로그아웃', 틀: B, 연결: [{ to: C, via: '버튼 「to c」' }] },
+    ]);
+    expect(읽기('summary.json')).toEqual({ 멈춘까닭: null, 상태들: ['로그아웃'], 예외: false });
+    expect(결과().screens[0]).toMatchObject({ 상태: '로그아웃', 파일: '로그아웃/001.yml', textFp: 목록[0]!.글자지문 });
+    expect(결과().screens[0]).not.toHaveProperty('record');
+  });
+
+  it('시작 때 쌓인 logcat 은 버리고, 누른 뒤 API 는 간 화면 몫 · 안 바뀌었거나 다른 앱이면 누른 화면 몫이다', async () => {
+    await run(['-s=c', 'crawl'], env);
+
+    const api = (u: string): { method: string; url: string } => ({ method: 'GET', url: `https://api.shop/${u}` });
+    expect(읽기('apis.json')).toEqual([
+      { 상태: '로그아웃', 틀: A, api: [api('web'), api('same-tap')] },
+      { 상태: '로그아웃', 틀: B, api: [api('b-load')] }, // 경로 다시 누르기의 b-load 는 겹쳐 하나
+      { 상태: '로그아웃', 틀: C, api: [api('c-load')] },
+    ]);
+  });
+
+  it('--api-pattern 을 crawl 에도 쓴다', async () => {
+    const out = await run(['-s=c', 'crawl', '--api-pattern', '/(POST) (\\S+)/'], env);
+
+    expect(out).toContain('API 0개');
+  });
+
+  it('--keep 저장본과 견줘 같음 · 바뀜 · 새 화면 · 못 본 화면을 list.json 과 요약 줄에 낸다', async () => {
+    await run(['-s=c', 'crawl'], env);
+    const 앞 = 읽기<목록줄[]>('list.json');
+    const 항목 = (x: 목록줄, 글자지문: string, 기록: string): Record<string, string> => ({
+      키: `로그아웃 ${x.틀}`, 상태: '로그아웃', 틀: x.틀, 주소: x.주소, 지문: x.지문, 글자지문, 기록, 훑은날: new Date().toISOString().slice(0, 10),
+    });
+    writeFileSync(
+      'kept.json',
+      JSON.stringify({
+        판: 1,
+        항목: [
+          항목(앞[0]!, 앞[0]!.글자지문, 'out-aaaaaaaaaaaa.md'),
+          항목(앞[1]!, '000000000000', 'out-bbbbbbbbbbbb.md'),
+          항목({ ...앞[1]!, 주소: 'app:.Main/gone', 틀: 'app:.Main/gone' }, '111111111111', 'out-cccccccccccc.md'),
+        ],
+      }),
+    );
+    쌓임 = ['A'];
+
+    const out = await run(['-s=c', 'crawl', '--keep', 'kept.json', '--out', 'out'], env);
+
+    expect(out).toContain('저장본 같음 1 · 바뀜 1 · 새 화면 1 · 저장본에 있는데 못 본 화면 1');
+    expect(out).toContain('· out/list.json');
+    const 목록 = JSON.parse(readFileSync('out/list.json', 'utf8')) as 목록줄[];
+    expect(목록.map((x) => [x.틀, x.저장본, x.저장기록])).toEqual([
+      [A, '같음', 'out-aaaaaaaaaaaa.md'],
+      [B, '바뀜', undefined],
+      [C, '새 화면', undefined],
+    ]);
+  });
+
+  it('도중에 Appium 이 죽어도 본 것까지는 남기고 summary 에 예외로 적는다', async () => {
+    const 기본처리 = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) =>
+      url.endsWith('/back') ? new Response(JSON.stringify({ value: { error: 'invalid session id', message: 'gone' } }), { status: 404 }) : 기본처리(url, init),
+    );
+
+    await expect(run(['-s=c', 'crawl'], env)).rejects.toThrow(/^크롤이 도중에 멈췄다 — Appium 이 HTTP 404 로 답했다: gone.*\.appium-cli\/crawl\/list\.json 에 남겼다$/);
+    expect(읽기('summary.json')).toEqual({ 멈춘까닭: null, 상태들: [], 예외: true });
+    expect(읽기<목록줄[]>('list.json').map((x) => x.틀)).toEqual([A, B]);
   });
 });
 
