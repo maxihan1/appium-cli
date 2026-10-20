@@ -44,7 +44,8 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
   list                               열린 session 목록
   logs [--grep <식>] [--api]          logcat 새 줄 (첫 호출은 쌓인 줄을 버린다) · --api 면 API 줄만 METHOD URL
   apis --session-id <id> | --file <logcat.txt>   남이 연 session · 팜 logcat 파일에서 API 를 [{method,url,at}] JSON 으로
-  crawl [--max 50] [--minutes 10]    지금 화면부터 눌러 가며 화면 키 · 연결을 .appium-cli/crawl.json 에 (--max 는 100 장까지)
+  crawl [--max 50] [--minutes 10] [--exclude <식>]   지금 화면부터 눌러 가며 화면 키 · 연결을 .appium-cli/crawl.json 에 (--max 는 100 장까지)
+                                     로그아웃 · 위험 글자(삭제 · 결제 …) · --exclude 에 맞는 이름은 안 누른다 (--exclude 는 여러 번)
 
 디바이스 팜 (session 을 열기 전에 폰을 잡는다)
   devices                            팜의 폰과 상태
@@ -128,6 +129,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       'session-id': { type: 'string' },
       file: { type: 'string' },
       max: { type: 'string' },
+      exclude: { type: 'string', multiple: true },
     },
   });
   const [명령, ...인자] = positionals;
@@ -237,8 +239,9 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       if (!Number.isInteger(장) || 장 < 1 || 장 > 100) throw new Error('--max 는 1 ~ 100 장이다');
       const 분 = Number(values.minutes ?? 10);
       if (!(분 > 0)) throw new Error('--minutes 는 0 보다 큰 수다');
+      const 뺄 = (values.exclude ?? []).map(정규식);
       const 시작 = Date.now();
-      const r = await crawl(c, sid, { 장, 분 });
+      const r = await crawl(c, sid, { 장, 분 }, 뺄);
       const 결과 = join(폴더, 'crawl.json');
       await writeFile(결과, JSON.stringify(r, null, 2));
       // 크롤이 화면을 옮겼으니 ref 표를 지금 화면으로 바꾼다

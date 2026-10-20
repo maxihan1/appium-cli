@@ -1,4 +1,4 @@
-// crawl 이 화면 셋 그래프를 도는지(새 화면 · 연결 · back · 재시작 + 경로 다시 누르기 · 다른 앱 · 상한)와 화면 키 규칙을 본다
+// crawl 이 화면 셋 그래프를 도는지(새 화면 · 연결 · back · 재시작 + 경로 다시 누르기 · 다른 앱 · 상한) · 안 누를 것 · 확인 창과 화면 키 규칙을 본다
 
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -15,13 +15,15 @@ interface 버튼 {
   desc?: string;
   id?: string;
   text?: string;
+  cls?: string;
+  password?: boolean;
 }
 
 // 버튼 i 는 [0,(i+1)*100][100,(i+1)*100+50] — 가운데 y 로 몇 번째인지 되찾는다
 function XML(틀: { desc?: string; id?: string }, 제목: string, 버튼들: 버튼[]): string {
   const 줄 = 버튼들.map(
     (b, i) =>
-      `<android.widget.Button text="${b.text ?? ''}" content-desc="${b.desc ?? ''}" resource-id="${b.id ?? ''}" clickable="true" bounds="[0,${(i + 1) * 100}][100,${(i + 1) * 100 + 50}]" />`,
+      `<android.widget.${b.cls ?? 'Button'} text="${b.text ?? ''}" content-desc="${b.desc ?? ''}" resource-id="${b.id ?? ''}" password="${b.password === true}" clickable="true" bounds="[0,${(i + 1) * 100}][100,${(i + 1) * 100 + 50}]" />`,
   );
   return `<hierarchy width="1080" height="2400">
   <android.widget.FrameLayout text="" content-desc="" resource-id="android:id/content" clickable="false" bounds="[0,0][1080,2400]">
@@ -34,12 +36,55 @@ function XML(틀: { desc?: string; id?: string }, 제목: string, 버튼들: 버
 }
 
 // A → B(~to b) · A → C(글자만 — 좌표) · A → 다른 앱 · A 안에서 그대로(id) · B → C · C 에서는 back 이 안 먹는다
-const 화면들: Record<string, { 틀: { desc?: string; id?: string }; 제목: string; 버튼: 버튼[]; 길: Record<string, string> }> = {
+type 그래프 = Record<string, { 틀: { desc?: string; id?: string }; 제목: string; 버튼: 버튼[]; 길: Record<string, string> }>;
+const 기본: 그래프 = {
   A: { 틀: { desc: 'a screen' }, 제목: 'Home', 버튼: [{ desc: 'to b' }, { text: 'To C' }, { desc: 'open web' }, { id: 'com.shop:id/same' }], 길: { 'to b': 'B', 'To C': 'C', 'open web': 'X' } },
   B: { 틀: { desc: 'b screen' }, 제목: 'Bee', 버튼: [{ desc: 'to c' }], 길: { 'to c': 'C' } },
   C: { 틀: { id: 'com.shop:id/c_root' }, 제목: 'Sea', 버튼: [{ text: 'c ok' }], 길: {} },
   X: { 틀: { desc: 'web' }, 제목: 'Chrome', 버튼: [], 길: {} },
 };
+// 확인 창 — 버튼은 화면 차례대로 취소(button2) · 확인(button1). 길 '<' 는 창이 닫힌다
+const 창 = (글: string, 칸: 버튼[] = []): 그래프[string] => ({
+  틀: {},
+  제목: 글,
+  버튼: [...칸, { id: 'android:id/button2', text: '취소' }, { id: 'android:id/button1', text: '확인' }],
+  길: { 'android:id/button1': '<', 'android:id/button2': '<' },
+});
+// 안 누를 것 · 확인 창 · 탈퇴 흐름 · 로그인 풀림
+const 위험앱: 그래프 = {
+  A: {
+    틀: { desc: 'a screen' },
+    제목: 'Home',
+    버튼: [
+      { desc: 'menu item log out' },
+      { text: '삭제' },
+      { id: 'com.shop:id/btn_delete' },
+      { desc: 'secret' },
+      { text: '게시글을 삭제하는 방법 안내 보기' },
+      { desc: 'ask' },
+      { desc: 'wipe' },
+      { desc: 'rename' },
+      { desc: 'close my account' },
+      { text: '회원 탈퇴 신청' },
+      { desc: 'settings' },
+      { desc: 'to login' },
+    ],
+    길: {
+      'menu item log out': 'L', 삭제: 'L', 'com.shop:id/btn_delete': 'L', secret: 'L', '게시글을 삭제하는 방법 안내 보기': 'G',
+      ask: 'D1', wipe: 'D2', rename: 'D3', 'close my account': 'D4', '회원 탈퇴 신청': 'W', settings: 'W2', 'to login': 'P',
+    },
+  },
+  L: { 틀: { desc: 'logged out' }, 제목: 'Bye', 버튼: [], 길: {} },
+  G: { 틀: { desc: 'guide screen' }, 제목: 'Guide', 버튼: [], 길: {} },
+  D1: 창('저장할까요?'),
+  D2: 창('모든 기록이 삭제됩니다'),
+  D3: 창('새 이름', [{ cls: 'EditText', desc: 'name input' }]),
+  D4: 창('Are you sure?'),
+  W: { 틀: { desc: 'leave screen' }, 제목: '안내', 버튼: [{ desc: 'go' }], 길: {} },
+  W2: { 틀: { desc: 'settings screen' }, 제목: '회원탈퇴', 버튼: [{ desc: 'confirm leave' }], 길: {} },
+  P: { 틀: { desc: 'login screen' }, 제목: 'Login', 버튼: [{ cls: 'EditText', desc: 'username input' }, { cls: 'EditText', desc: 'password input', password: true }], 길: {} },
+};
+let 화면들 = 기본;
 const 이름 = (b: 버튼): string => b.desc || b.id || b.text || '';
 
 const fetchMock = vi.fn();
@@ -54,13 +99,15 @@ function 누름(i: number): void {
   const b = 화면들[위]!.버튼[i]!;
   눌림.push(`${위} ${이름(b)}`);
   const 다음 = 화면들[위]!.길[이름(b)];
-  if (다음 !== undefined) 쌓임.push(다음);
+  if (다음 === '<') 쌓임.pop();
+  else if (다음 !== undefined) 쌓임.push(다음);
 }
 
 beforeEach(async () => {
   Object.assign(가라앉기, { 최대_ms: 0, 간격_ms: 0 });
   process.chdir(mkdtempSync(join(tmpdir(), 'appium-cli-')));
   쌓임 = ['A'];
+  화면들 = 기본;
   fetchMock.mockReset();
   fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
     const path = url.replace('http://farm:4723/wd/hub', '');
@@ -145,6 +192,36 @@ describe('crawl', () => {
 
     expect(out).toContain('(멈춤: --max 2장)');
     expect(결과().screens.map((s) => s.key)).toEqual(['app:.Main/a screen', 'app:.Main/b screen']);
+  });
+
+  it('로그아웃 · 위험 글자 · --exclude 는 안 누르고, 확인 창은 확인 · back 으로 닫고, 탈퇴 흐름에서는 아무것도 안 누르고, 로그인 화면은 표시한다', async () => {
+    화면들 = 위험앱;
+    await run(['-s=c', 'crawl', '--exclude', '/SECRET/i', '--exclude', 'nothing'], env);
+
+    expect(눌림).toEqual([
+      'A 게시글을 삭제하는 방법 안내 보기', // 긴 글은 버튼이 아니다
+      'A ask',
+      'D1 android:id/button1', // 그냥 확인 창은 확인
+      'A wipe', // 되돌릴 수 없음 — back
+      'A rename', // 입력칸 — back
+      'A close my account', // 탈퇴 이름으로 뜬 창 — back
+      'A 회원 탈퇴 신청',
+      'A settings',
+      'A to login',
+      'A 게시글을 삭제하는 방법 안내 보기', // G 로 가는 경로 다시 누르기
+      'A to login', // W · W2 는 탈퇴 흐름이라 건너뛰고 P 로
+      'P username input',
+      'P password input',
+    ]);
+    const r = 결과();
+    expect(r.dialogs).toEqual({ 누름: 1, 경고: 1, 입력: 1, 탈퇴: 1 });
+    expect(r.screens.map((s) => [s.key, s.탈퇴흐름 ?? false, s.로그인풀림 ?? false])).toEqual([
+      ['app:.Main/a screen', false, false],
+      ['app:.Main/guide screen', false, false],
+      ['app:.Main/leave screen', true, false],
+      ['app:.Main/settings screen', true, false],
+      ['app:.Main/login screen', false, true],
+    ]);
   });
 
   it('--max 는 1 ~ 100 장만 받는다', async () => {

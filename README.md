@@ -45,9 +45,10 @@ npx appium-cli apis --session-id <id>          # 남이 연 session 에서 같�
 
 ```bash
 npx appium-cli -s=probe crawl --max 50 --minutes 10   # → .appium-cli/crawl.json
+npx appium-cli -s=probe crawl --exclude '/설정|settings/i' --exclude 'com.shop:id/pay'   # 이름이 맞는 버튼은 안 누른다
 ```
 
-⚠️ 안 누를 것 판정(로그아웃 · 탈퇴 · 결제 …)은 다음 판(CLI-F5-03)이다 — 그 전에는 지워져도 되는 앱 · 계정에서만 돌린다.
+안 누르는 것 — 로그아웃(늘) · 12자 이하 이름이나 resource-id 에 위험 글자(삭제 · 결제 · 담기 · 해지 · delete · remove …)가 든 버튼 · `--exclude` 식에 맞는 이름(desc → id → 글자). 탈퇴 버튼은 누르되 그 뒤 화면(이름에 탈퇴가 든 화면도)에서는 아무것도 안 누른다. 누른 뒤 Android 확인 창이 뜨면 탈퇴 · 되돌릴 수 없음 경고 · 입력칸이면 back, 아니면 확인 버튼 하나를 누른다(`crawl.json` `dialogs`). 아이디 칸 + 비밀번호 칸이 같이 뜬 화면은 `로그인풀림: true`.
 
 ## 연결
 

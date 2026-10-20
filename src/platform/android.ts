@@ -7,6 +7,8 @@ export interface 요소 {
   id: string;
   bounds: string;
   누름: boolean;
+  // 비밀번호 칸 — 글자는 싣지 않지만 로그인 화면을 가리는 데 쓴다
+  비밀번호: boolean;
 }
 
 export interface 화면 {
@@ -76,7 +78,7 @@ export function parseSource(xml: string): 화면 {
     if (남김) {
       const ref = `e${Object.keys(refs).length + 1}`;
       const cls = 이름!.split('.').pop()!;
-      refs[ref] = { cls, text: 글, desc: 이름표, id, bounds: a.bounds ?? '', 누름 };
+      refs[ref] = { cls, text: 글, desc: 이름표, id, bounds: a.bounds ?? '', 누름, 비밀번호: a.password === 'true' };
       const 칸 = [cls];
       if (글 !== '') 칸.push(`text=${JSON.stringify(글)}`);
       if (이름표 !== '') 칸.push(`desc=${JSON.stringify(이름표)}`);
