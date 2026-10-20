@@ -92,3 +92,23 @@
 - **`screen` 은 crawl 의 `본다()`(이제 export)를 그대로 부른다** — source · current_activity · current_package 를 읽고 키는 crawl 이 남기는 값과 같다. 출력은 `<키> · <이름>`, 이름이 없으면 키만. 화면 파일 · ref 표는 안 바꾼다(읽기만). `--raw`/JSON 은 안 붙였다.
 - 꾸러미 확인: `npm pack` tgz 를 빈 폴더에 깔아 `import('appium-cli')` → `[apiLines, parseSource, screenKey]`, `tsc --moduleResolution nodenext --skipLibCheck false` 로 타입도 통과. GitHub 설치(`github:…#tag`)는 새 태그가 있어야 받는다 — 태그는 주인이 정한다(이번엔 안 만들었다).
 - 확인 못 한 것: 실기기 `screen`(폰을 안 잡았다) · test_platform 쪽 실제 import(그쪽 작업).
+
+## 2026-10-20 로그인 상태 · 실기기 (CLI-F5-05) — 팜 폰 R3CR10TCVCD · MDA v1.3.0 release
+- **`crawl --login <스크립트>` 의 스크립트 = `appium-cli -s=<이름>` 뒤에 쓰는 명령을 한 줄에 하나.** 따옴표로 띄어쓰기를 묶고(`fill '~Username input field' bob@example.com`) 빈 줄 · `#` 줄은 건너뛴다. 받는 명령은 `tap` · `click` · `fill` · `back` · `swipe` 뿐이고 `tap` · `fill` 은 선택자만(ref 는 화면마다 바뀐다) — 틀리면 Appium 을 부르기 전에 던진다. 줄마다 `run()` 을 그대로 부르니 가라앉기 · 코드 규칙이 사람이 친 것과 같다. 끝나면 앱 첫 화면이어야 한다(재시작 뒤 거기서 경로를 누른다). MDA 는 로그인하면 products screen 으로 가서 맞았다.
+- **tap · fill 이 ref 대신 `~desc` · `id=…` 를 받는다.** 마지막 화면을 안 보고 지금 앱에서 찾고, 못 찾으면 `가라앉기.찾기_ms`(10초) 동안 다시 찾는다 — clearApp 뒤 앱이 처음 뜨는 데 몇 초 걸린다. 겹치는 선택자면 첫 번째가 눌린다(Appium 규칙).
+- **판 = test_platform 상태.** 로그아웃 판을 돈 뒤 `mobile: clearApp`(막히면 `terminateApp`) → `activateApp` → 스크립트 → `로그인:<역할>` 판. 역할 기본은 test_platform `기본역할`(`@platform/kit/accounts` = `일반 회원`), `--role` 로 바꾼다(`상태인가` 꼴로 먼저 본다). 장수 · 마감은 test_platform 몫과 같이 나눈다(`(남은 장) / (남은 판)`, 마감 `시작 + (i+1)·분/판수`). 멈춘 까닭은 첫 것만(`??=`) — 여러 판이면 `로그아웃 몫 · --minutes 12` 꼴. 로그인하며 찍힌 logcat 은 버린다.
+- **크롤 결과 하나에 판을 다 싣는다**(test_platform `판` 처럼). 화면 · 연결에 `상태` 칸, 같은 키 판정 · API 배정은 판 안에서. `index.json` 에 `상태들`(끝까지 돈 판 — summary 도 이것) · `다시로그인` · `앱비우기`. `결과파일들(r, 저장, 오늘)` 이 번호를 판을 이어 매기고(`로그아웃/001…` 다음 `로그인/014…`) `목록고르기`(로그인 판 로그인풀림 빼고, 로그인 판에도 있는 키의 로그아웃 화면 빼고, 시작 화면은 둘 다) · `연결모으기`(빠진 로그아웃 화면의 연결 · API 를 같은 키의 로그인 화면에 합침)를 옮겼다.
+- **다시 로그인 (test_platform 과 같은 뜻).** 로그인 판에서 누른 뒤 로그인 화면이면 앱을 비우고 다시 로그인한 뒤 같은 버튼을 한 번 더 누른다 — 또 로그인 화면이면 로그인 칸이 있는 화면으로 남기고(로그인풀림, 목록에서 빠짐) 안 돈다. 로그아웃 이름은 다시 로그인할 수 있을 때만 후보가 되고(`후보들(h, 뺄, 로그아웃누름)`), 누르면 그 뒤 화면은 안 남기고(연결은 남김) 다시 로그인한다. 판마다 세 번까지 — 다 쓰면 로그아웃은 후보에서 빠지고, 로그인 화면이 또 뜨면 `로그인이 풀림` 으로 그 판을 멈춘다. 처음 로그인은 세지 않는다. 스크립트 뒤에도 로그인 화면이면 던진다(로그아웃 판까지는 남는다).
+- **실측 (마지막 실행, `--max 40 --minutes 12`).** open 8.4초. 로그아웃 판 13장 · 로그인 판 12장 · 목록 14장(로그아웃은 시작 화면 · login screen 만 남는다) · 연결 46개(links.json 은 합쳐 36개) · 누름 66번 · 재시작 47번 · 확인 창 26번(모두 확인 누름) · 다시 로그인 2번 · 725초. 두 판 다 6분 몫 시간에 닿았다 — 장수 상한(20)은 안 닿았다. 누름 하나에 약 11초(재시작 + 경로 다시 누르기가 대부분). 화면 파일은 6.8KB 아래.
+  - 다시 로그인 둘: `menu item log out`(확인 창 → 로그인 화면 → 다시 로그인) 하나, `menu item log in` 이 로그인 판에서도 로그인 화면을 띄운 것 하나(다시 누르니 cart screen 으로 갔다 — 첫 누름은 링크를 안 남겨 index 에는 다시 누른 결과만 있다).
+  - **`mobile: clearApp` 이 팜에서 됐다** — 세 번(처음 + 다시 둘) 다 `앱비우기: mobile: clearApp`, 그 뒤 로그인 스크립트가 10초 기다림 안에 돌았다.
+  - **화면 키는 두 판 · 두 실행에서 같았다** — products screen · cart screen · product screen · webview selection screen · drawing screen · about screen · biometrics screen · api calls screen · SauceBot screen 은 컨테이너 desc, 서랍 메뉴는 `menu item webview`(아래), 정렬 창은 `active option`(체크 표시의 desc — 이름은 약하지만 늘 있다), 리뷰 감사 창은 구조 지문 `387b3554fc5f`(세 실행 같음).
+  - 못 본 것: QR · 위치(권한 창 = 다른 앱이라 back) · 상품 담기 → 결제(시간 안에 못 감 — 그래서 로그인해야만 보이는 화면은 이번엔 없었다). MDA 가 앱 재시작 뒤에도 로그인을 들고 있는지는 못 가렸다(두 판 화면이 같다).
+  - **API 는 안 쟀다** — MDA release 빌드라 네트워크 로그가 없다(API 0개). debug apk 가 없어 WBS 대로 API 만 빼고 닫는다.
+- **실기기에서 고친 것 (모두 테스트 붙임).**
+  1. *키 뭉침 — 서랍 메뉴.* 첫 실행은 로그아웃 4장 · 로그인 4장뿐이었다. 서랍이 열려도 products screen 이 트리에 그대로 있어 메뉴 키가 products screen 이 되고(구조만 바뀐 누르기로 보고 back) 메뉴 아래를 못 갔다. → `요소.깊이`(XML 깊이)를 더하고, 컨테이너 자손이 아닌데 가운데가 컨테이너 안에 든 요소(덮개)가 있으면 덮개의 첫 누를 것(desc → id)을 이름표로 쓴다. 덮개를 품는 바탕(전체 화면 backdrop · content)은 뺀다. MDA 서랍은 `menu item catalog` 가 컨테이너 위쪽이라 `menu item webview` 가 이름표다 — 어느 화면에서 열어도 같다. `ponytail:` 컨테이너와 겹치는 떠 있는 버튼도 덮개로 본다.
+  2. *자식 글자만 가진 버튼.* 상품 칸이 이름 없는 clickable ViewGroup 이라 후보가 아니었다(F5-02 · 03 에서 미뤘던 것). → 이름이 없으면 자손의 첫 desc · 글자로 부른다. 상품 여섯이 다 `store item text` 라 하나만 누른다 — product screen 이 생겼다.
+  3. *버튼 칸이 빈 확인 창.* 둘째 실행에서 「App State has been reset.」 · 로그아웃 뒤 창이 버튼 없이(`android:id/buttonPanel` 이 빔) 와서 화면으로 남고, 구조 지문이 같아 서로 다른 창이 `aa9d6298fe97` 한 키로 뭉쳤다. → `android:id/alertTitle` · `parentPanel` 이 있으면 버튼이 없어도 창(`남음` → back).
+  4. *이어 뜨는 창.* 확인 뒤 「됐다」 창이 또 뜬다(MDA 초기화 · 로그아웃). → 창 닫기를 세 번까지 되풀이한다.
+  셋째 실행에서 뭉친 창 화면은 없어졌다(그 실행은 버튼이 다 와서 `남음` 갈래는 단위 테스트로만 확인).
+- 재시작이 누름의 70% 다 — 서랍 메뉴 항목이 간 화면에서 back 하면 서랍이 아니라 products 로 돌아가서다. 장수를 늘리려면 back 뒤 화면이 경로의 중간 화면이면 그 뒤만 누르는 쪽(경로 줄이기)이 다음 손볼 곳이다. 지금은 안 한다.

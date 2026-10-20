@@ -49,7 +49,8 @@ API 는 logcat 으로 본다 — QA 는 debug 빌드라 네트워크 로그가 �
   - 근거 commit 9c94caf · 2026-10-20
 - [x] `CLI-F5-06` 라이브러리로 내보내기 · `screen` 명령 — test_platform kit · 러너 · 스캐너가 CLI 를 띄우지 않고 부르게 `package.json` `exports` 로 `screenKey(xml)`(F5-02 와 같은 규칙) · `parseSource` · `apiLines(logcat)`(F5-01 과 같은 규칙)을 낸다. `screen` 명령은 지금 화면 키 · 이름을 낸다 — 작성 AI 가 앱 화면 파일에 화면 주소 값으로 적는다(**케이스 ↔ 화면** 의 재료). README · SKILL.md 에 쓰는 법. 테스트: 내보낸 함수가 CLI 와 같은 값을 내는지
   - 근거 commit 1fe68b7 · 2026-10-20
-- [ ] `CLI-F5-05` 로그인 상태 · 실기기 — 로그아웃 상태를 먼저 돌고, `--login <스크립트>`(appium-cli 명령 묶음)로 로그인해 다시 돈다. 풀리면 앱 데이터 지우기(`mobile: clearApp`) 뒤 다시 로그인 — 세 번까지. 실기기: 팜 폰 + MDA 로 로그아웃 · 로그인 두 상태를 돌아 장수 · 시간 · 링크 수를 `context-notes.md` 에 적는다. API 줄은 debug apk 가 있으면 함께 본다 (사용자: debug apk — 없으면 API 만 빼고 닫는다)
+- [x] `CLI-F5-05` 로그인 상태 · 실기기 — 로그아웃 상태를 먼저 돌고, `--login <스크립트>`(appium-cli 명령 묶음)로 로그인해 다시 돈다. 풀리면 앱 데이터 지우기(`mobile: clearApp`) 뒤 다시 로그인 — 세 번까지. 실기기: 팜 폰 + MDA 로 로그아웃 · 로그인 두 상태를 돌아 장수 · 시간 · 링크 수를 `context-notes.md` 에 적는다. API 줄은 debug apk 가 있으면 함께 본다 (사용자: debug apk — 없으면 API 만 빼고 닫는다)
+  - 근거 commit ec0e5ed · 2026-10-20 (팜 폰 · MDA — 결과는 context-notes.md)
 
 ---
 
