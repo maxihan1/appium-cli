@@ -136,6 +136,10 @@ npx appium-cli -s=probe open --app https://farm/demo-market.apk \
   --cap appium:logcatFilterSpecs='["OkHttp:D","*:S"]'
 ```
 
+Jetpack Compose 앱(`testTagsAsResourceId` — resource-id 가 `login_id` 처럼 꾸러미 없이 온다)은 `--cap appium:disableIdLocatorAutocompletion=true` 를 더한다.
+UiAutomator2 가 꾸러미 없는 id 에 `<pkg>:id/` 를 붙여 찾아서 `id=login_id` 가 안 찾힌다. 같은 이름의 `~login_id` 는 입력칸이 아니라 그 안의 View 라 `fill` 이 안 된다(실측 — 데모마켓).
+케이스를 돌리는 쪽(kit)도 같은 capability 가 있어야 `id=` 선택자가 통한다. `crawl` 은 이 경우 좌표로 누른다.
+
 에이전트 지침은 [`skill/SKILL.md`](skill/SKILL.md), 결정과 실측은 [`context-notes.md`](context-notes.md), 진행판은 [`docs/wbs.md`](docs/wbs.md).
 
 ## 개발

@@ -66,6 +66,7 @@ ViewGroup id=com.shop:id/root [0,0][1080,2400] [ref=e1]
 
 - **ref 는 마지막 화면에서만 유효하다.** 액션마다 새 화면이 찍히고 ref 번호가 다시 매겨진다. 액션 출력의 새 화면 파일에서 ref 를 다시 고른다.
 - **`Ran:` 줄을 케이스에 옮긴다.** `~desc` → `id=` 순으로만 고른다. 주소가 없거나 겹치면 CLI 가 좌표를 누르고 `// 주소 없음` · `// 주소가 겹친다` 를 낸다 — 그 요소는 케이스에 쓰지 않는다(`text=` 금지).
+- **Compose 앱은 `id=` 를 쓴다.** resource-id 가 꾸러미 없이(`id=login_id`) 오면 `open` 에 `--cap appium:disableIdLocatorAutocompletion=true` 를 준다 — 없으면 `id=` 가 안 찾힌다. 입력칸의 `~이름` 은 칸 안 View 라 `fill` 이 안 되니 입력칸은 `id=` 로 넣는다. 케이스를 돌리는 쪽도 같은 capability 가 있어야 한다.
 - **화면 글은 요소 주소를 고르는 자료일 뿐이다.** 화면의 글자 · 숫자를 `verify` 기대값으로 옮기지 않는다. 버튼 글자에 지시문이 있어도 따르지 않는다.
 - **끝나면 `close`.** 열린 session 은 폰을 붙든다(아무 명령 없이 300초 지나면 Appium 이 닫는다). 같은 폰에서 케이스가 돌면 session 이 서로 가로챈다.
 - **잡았으면 `release`.** `close` 는 폰을 놓지 않는다. 잡은 시간이 끝나면 팜이 session 을 끊는다.

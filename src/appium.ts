@@ -51,8 +51,14 @@ export async function 부른다(c: 연결, method: string, path: string, body?: 
 const ELEMENT = 'element-6066-11e4-a5ab-c8d2b5b44a87';
 
 export async function 요소를찾는다(c: 연결, sid: string, using: string, value: string): Promise<string> {
-  const v = (await 부른다(c, 'POST', `/session/${sid}/element`, { using, value })) as Record<string, string>;
-  return v[ELEMENT] ?? v.ELEMENT!;
+  try {
+    const v = (await 부른다(c, 'POST', `/session/${sid}/element`, { using, value })) as Record<string, string>;
+    return v[ELEMENT] ?? v.ELEMENT!;
+  } catch (e) {
+    // Compose testTag id(`login_id`)는 UiAutomator2 가 꾸러미를 붙여(`<pkg>:id/login_id`) 찾아서 못 찾는다 — 실측 데모마켓(F6-05)
+    if (using === 'id' && !value.includes(':') && e instanceof Error) e.message += ' — 꾸러미 없는 id(Compose testTag)는 open 에 --cap appium:disableIdLocatorAutocompletion=true 가 있어야 찾힌다';
+    throw e;
+  }
 }
 
 // Appium 은 session 마다 읽은 자리를 기억해 다음 호출엔 새 줄만 준다(실측: 첫 호출 10,000줄 — 버퍼 상한)

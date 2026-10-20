@@ -317,6 +317,25 @@ describe('crawl', () => {
     expect(결과().screens.map((s) => s.key)).toEqual(['app:.Main/a screen']);
   });
 
+  it('하나뿐인 선택자인데 못 찾으면(Compose testTag id) 좌표로 누른다', async () => {
+    화면들 = {
+      A: { 틀: { desc: 'a screen' }, 제목: 'Home', 버튼: [{ id: 'go_d' }], 길: { go_d: 'D' } },
+      D: { 틀: { desc: 'd screen' }, 제목: 'Dee', 버튼: [], 길: {} },
+    };
+    const 기본 = fetchMock.getMockImplementation()!;
+    // UiAutomator2 는 꾸러미 없는 id 에 꾸러미를 붙여 찾아 못 찾는다
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) =>
+      url.endsWith('/element') ? new Response(JSON.stringify({ value: { error: 'no such element', message: 'none' } }), { status: 404 }) : 기본(url, init),
+    );
+
+    await run(['-s=c', 'crawl'], env);
+
+    // 둘째는 D 로 가는 경로 다시 누르기다
+    expect(눌림).toEqual(['A go_d', 'A go_d']);
+    expect((fetchMock.mock.calls as [string][]).filter(([u]) => u.endsWith('/actions'))).toHaveLength(2);
+    expect(결과().screens.map((s) => s.key)).toEqual(['app:.Main/a screen', 'app:.Main/d screen']);
+  });
+
   it('--max 는 1 ~ 100 장만 받는다', async () => {
     fetchMock.mockClear();
     await expect(run(['-s=c', 'crawl', '--max', '101'], env)).rejects.toThrow('--max 는 1 ~ 100 장이다');

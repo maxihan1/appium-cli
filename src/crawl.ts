@@ -108,9 +108,17 @@ export function 후보들(h: 화면, 뺄: readonly RegExp[] = [], 로그아웃�
 async function 누른다(c: 연결, sid: string, h: 화면, el: 요소): Promise<void> {
   const loc = locatorFor(el);
   if (loc !== null && Object.values(h.refs).filter((e) => locatorFor(e) === loc).length === 1) {
-    const id = await 요소를찾는다(c, sid, w3c(loc).using, w3c(loc).value);
-    await 부른다(c, 'POST', `/session/${sid}/element/${id}/click`, {});
-    return;
+    // 꾸러미 없는 id(Compose testTag — F6-05)는 UiAutomator2 가 꾸러미를 붙여 찾아 못 찾을 수 있다 — 그때만 좌표로 누른다(크롤은 코드를 안 낸다).
+    // 다른 선택자를 못 찾으면 그사이 사라진 것이라 그대로 던진다
+    const 꾸러미없음 = loc.startsWith('id=') && !loc.includes(':');
+    const id = await 요소를찾는다(c, sid, w3c(loc).using, w3c(loc).value).catch((e: unknown) => {
+      if (꾸러미없음) return null;
+      throw e;
+    });
+    if (id !== null) {
+      await 부른다(c, 'POST', `/session/${sid}/element/${id}/click`, {});
+      return;
+    }
   }
   const p = center(el.bounds);
   if (p === null) throw new Error('위치를 모른다');

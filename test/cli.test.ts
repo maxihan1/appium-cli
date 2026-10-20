@@ -169,6 +169,38 @@ describe('tap', () => {
     await expect(run(['-s=probe', 'tap', '~없는 버튼'], env)).rejects.toThrow('~없는 버튼 를 지금 화면에서 못 찾았다 — Appium 이 HTTP 404 로 답했다: none');
   });
 
+  it('꾸러미 없는 id(Compose testTag)를 못 찾으면 disableIdLocatorAutocompletion 을 알린다 — 꾸러미 있는 id 는 안 붙인다', async () => {
+    가라앉기.찾기_ms = 0;
+    const 기본 = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) =>
+      url.endsWith('/element') ? 답({ error: 'no such element', message: 'none' }, 404) : 기본(url, init),
+    );
+
+    await expect(run(['-s=probe', 'tap', 'id=login_id'], env)).rejects.toThrow('none — 꾸러미 없는 id(Compose testTag)는 open 에 --cap appium:disableIdLocatorAutocompletion=true 가 있어야 찾힌다');
+    await expect(run(['-s=probe', 'tap', 'id=com.shop:id/pw'], env)).rejects.toThrow(/none$/);
+  });
+
+  it('주소 없는 칸의 fill 은 가운데를 누르고 element/active 가 잡힐 때까지 다시 묻는다', async () => {
+    const 기본 = fetchMock.getMockImplementation()!;
+    let 물음 = 0;
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
+      if (!url.endsWith('/element/active')) return 기본(url, init);
+      물음++;
+      return 물음 < 3 ? 답({ error: 'no such element', message: 'none' }, 404) : 답({ 'element-6066-11e4-a5ab-c8d2b5b44a87': 'el-7' });
+    });
+
+    const out = await run(['-s=probe', 'fill', 'e2', 'hi'], env);
+
+    expect(부른길().filter((p) => !p.endsWith('/source'))).toEqual([
+      'POST /session/s-1/actions',
+      'GET /session/s-1/element/active',
+      'GET /session/s-1/element/active',
+      'GET /session/s-1/element/active',
+      'POST /session/s-1/element/el-7/value',
+    ]);
+    expect(out.split('\n')[0]).toBe('Ran: // 주소 없음 — desc 도 id 도 없다. text= 로 찾지 않는다 (좌표 20,30 칸에 넣었다)');
+  });
+
   it('마지막 화면에 없는 ref 는 Appium 을 부르지 않고 던진다', async () => {
     await expect(run(['-s=probe', 'tap', 'e99'], env)).rejects.toThrow('ref e99 가 마지막 화면에 없다');
     expect(fetchMock).not.toHaveBeenCalled();

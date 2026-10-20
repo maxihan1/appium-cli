@@ -174,18 +174,20 @@ function 대상(s: 세션, x: string | undefined): { el: 요소 | null; loc: str
   return { el, loc, 막힘: 선택자글(loc, 겹침) };
 }
 
-// 선택자로 찾는다 — 앱이 막 떴으면(로그인 스크립트 첫 줄) 뜰 때까지 다시 찾는다
-async function 찾는다(c: 연결, sid: string, loc: string): Promise<string> {
+// 찾기_ms 동안 다시 해 본다 — 앱이 막 떴거나(로그인 스크립트 첫 줄) 좌표를 누른 뒤 입력칸이 아직 안 잡혔을 때
+async function 될때까지(일: () => Promise<string>, 실패: string): Promise<string> {
   const 끝 = Date.now() + 가라앉기.찾기_ms;
   for (;;) {
     try {
-      return await 요소를찾는다(c, sid, w3c(loc).using, w3c(loc).value);
+      return await 일();
     } catch (e) {
-      if (Date.now() >= 끝) throw new Error(`${loc} 를 지금 화면에서 못 찾았다 — ${e instanceof Error ? e.message : String(e)}`);
+      if (Date.now() >= 끝) throw new Error(`${실패} — ${e instanceof Error ? e.message : String(e)}`);
       await new Promise((ok) => setTimeout(ok, 가라앉기.간격_ms));
     }
   }
 }
+
+const 찾는다 = (c: 연결, sid: string, loc: string): Promise<string> => 될때까지(() => 요소를찾는다(c, sid, w3c(loc).using, w3c(loc).value), `${loc} 를 지금 화면에서 못 찾았다`);
 
 // 케이스에 옮겨 쓸 수 있는 선택자만 코드로 낸다. 없거나 겹치면 까닭을 적는다 (test_platform tpx-author/references/app.md §2)
 function 선택자글(loc: string | null, 겹침: number): string | null {
@@ -448,8 +450,11 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
         const p = center(el!.bounds);
         if (p === null) throw new Error(`${인자[0]} 의 위치를 모른다`);
         await 좌표를누른다(c, sid, p.x, p.y);
-        const v = (await 부른다(c, 'GET', `/session/${sid}/element/active`)) as Record<string, string>;
-        id = Object.values(v)[0]!;
+        // 실측(F6-05 Compose): 첫 입력칸은 누르고 1초 뒤에도 element/active 가 no such element 였다 — 키보드가 뜨며 잡힌다
+        id = await 될때까지(
+          async () => Object.values((await 부른다(c, 'GET', `/session/${sid}/element/active`)) as Record<string, string>)[0]!,
+          `좌표 ${p.x},${p.y} 를 누른 뒤 입력칸이 안 잡혔다`,
+        );
         코드 = `// ${막힘} (좌표 ${p.x},${p.y} 칸에 넣었다)`;
       }
       await 부른다(c, 'POST', `/session/${sid}/element/${id}/value`, { text: 값 });
