@@ -11,6 +11,8 @@ import { 로그인화면인가, 안누를까닭, 탈퇴말인가, 확인창, typ
 const 화면누름상한 = 30; // 버튼이 수백 개인 화면 하나가 시간을 다 먹지 않게 (test_platform 과 같다)
 const API상한 = 200; // 화면 하나에서 — test_platform 서버 상한과 같다(PUT …/screens)
 const 다시로그인상한 = 3; // 누를 때마다 로그아웃되는 앱에서 돌고 돌지 않게 (test_platform 과 같다)
+const 스크롤상한 = 5; // 화면 하나에서 목록을 위로 미는 수 — 끝없이 더 불러오는 목록이 시간을 다 먹지 않게
+const 스크롤걸음 = /^↓(\d+)$/; // path 안 스크롤 걸음 — 「본문 목록을 위로 n 번 민다」. 후보 이름이 아니다
 
 /** 구조 지문 — test_platform `지문`(authoring-crawl-rules.ts)과 같다. 따옴표 안 글자 · 숫자를 빼고 짜임만 본다 */
 export function 지문(글: string): string {
@@ -35,6 +37,10 @@ function 자손(els: readonly 요소[], i: number): 요소[] {
 }
 
 const 가장큰 = (els: 요소[]): 요소 | undefined => els.reduce<요소 | undefined>((a, e) => (a === undefined || 넓이(e) > 넓이(a) ? e : a), undefined);
+
+// 본문 목록 — scrollable 요소 가운데 가장 큰 것
+// ponytail: 가로 목록(분류 칩)이 가장 크면 위로 밀어도 안 움직여 새 후보 없음으로 끝난다 — 그런 앱이 나오면 세로 목록을 고른다
+const 목록 = (h: 화면): 요소 | undefined => 가장큰(Object.values(h.refs).filter((e) => e.속성.scrollable === 'true'));
 
 /**
  * 본문 컨테이너 — 누르지 못하는 요소 가운데 desc 가 있는 가장 큰 것, 없으면 앱 resource-id(`android:id/…` 는 모든 앱에 있어 뺀다)가 있는 가장 큰 것.
@@ -141,7 +147,7 @@ export async function 본다(c: 연결, sid: string, 앞?: string): Promise<지�
 
 export interface 본화면 extends 화면정보 {
   상태: 상태;
-  // 시작 화면에서 누른 후보 이름 차례 — 앱을 다시 띄운 뒤 이대로 다시 누른다
+  // 시작 화면에서 누른 후보 이름 차례 — 앱을 다시 띄운 뒤 이대로 다시 누른다. `↓n` 은 그 화면 목록을 위로 n 번 민 뒤 다음 이름을 누른다는 걸음
   path: string[];
   // 탈퇴 이름으로 왔거나 이름 · 키가 탈퇴다 — 이 화면에서는 아무것도 안 누른다
   탈퇴흐름?: true;
@@ -236,12 +242,29 @@ export async function crawl(
 
   const 앱에 = (script: string): Promise<unknown> => 부른다(c, 'POST', `/session/${sid}/execute/sync`, { script, args: [{ appId: app }] });
 
+  // 본문 목록을 손가락 위로 한 번 민다(아래 내용이 올라온다) — swipe 명령과 같은 mobile: swipeGesture 를 목록 자리에. 목록이 없으면 false
+  const 민다 = async (): Promise<boolean> => {
+    const n = 상자(목록(지금.화면)?.bounds ?? '');
+    if (n === null) return false;
+    await 부른다(c, 'POST', `/session/${sid}/execute/sync`, {
+      script: 'mobile: swipeGesture',
+      args: [{ left: n[0], top: n[1], width: n[2]! - n[0]!, height: n[3]! - n[1]!, direction: 'up', percent: 0.75 }],
+    });
+    지금 = await 본다(c, sid, 지금.화면.글);
+    return true;
+  };
+
   const 되돌린다 = async (목표: 본화면): Promise<boolean> => {
     r.restarts++;
     await 앱에('mobile: terminateApp');
     await 앱에('mobile: activateApp');
     지금 = await 본다(c, sid, 지금.화면.글);
     for (const 이름 of 목표.path) {
+      const 내림 = 스크롤걸음.exec(이름);
+      if (내림 !== null) {
+        for (let k = 0; k < Number(내림[1]); k++) if (!(await 민다())) return false;
+        continue;
+      }
       const x = 후보들(지금.화면, 뺄).find((h) => h.이름 === 이름);
       if (x === undefined) return false;
       if (!(await 누른다(c, sid, 지금.화면, x.el).then(() => true, () => false))) return false;
@@ -288,18 +311,48 @@ export async function crawl(
       return true;
     };
 
+    // 다시 띄운 뒤면 위치가 달라졌을 수 있어 지금 화면에서 다시 찾는다. 다시 로그인을 다 썼으면 로그아웃은 여기서 빠진다
+    const 찾는다 = (이름들: readonly string[]): 후보 | undefined => 후보들(지금.화면, 뺄, 로그인남음()).find((h) => 이름들.includes(h.이름));
+    /**
+     * 목표 화면에서 이름들 중 하나가 보이게 한다 — 못 가면 null, 가서도 안 보이면 undefined.
+     * 깊이(민 수) 0 이면 화면만 맞춘다. 아니면 back 뒤 목록 자리가 남는 앱이 많아 그대로 보고, 처음으로 갔으면 위로 깊이 번까지 밀며 찾고,
+     * 그래도 없으면 앱을 다시 띄워 경로 + 깊이 번 민다
+     */
+    const 보이게 = async (목표: 본화면, 깊이: number, 이름들: readonly string[]): Promise<후보 | undefined | null> => {
+      if (지금.정보.key !== 목표.key && !(await 되돌린다(목표))) return null;
+      let x = 찾는다(이름들);
+      if (깊이 === 0 || x !== undefined) return x;
+      for (let k = 0; k < 깊이 && x === undefined && (await 민다()); k++) x = 찾는다(이름들);
+      if (x !== undefined) return x;
+      if (!(await 되돌린다(목표))) return null;
+      for (let k = 0; k < 깊이 && (await 민다()); k++);
+      return 찾는다(이름들);
+    };
+
     for (let 목표 = 대기.shift(); 목표 !== undefined; 목표 = 대기.shift()) {
       if (시간끝()) return true;
       if (목표.탈퇴흐름) continue;
       // 못 가는 화면(경로 글자가 바뀌었다)은 건너뛴다
       if (지금.정보.key !== 목표.key && !(await 되돌린다(목표))) continue;
-      const 이름들 = 후보들(지금.화면, 뺄, 로그인남음()).slice(0, 화면누름상한).map((x) => x.이름);
-      for (let i = 0; i < 이름들.length; i++) {
-        const 이름 = 이름들[i]!;
+      // 깊이 = 그 후보가 보이기까지 목록을 민 수. 다 누르면 목록을 한 번 더 밀어 이 화면에서 처음 보는 이름을 잇는다 — 새 이름이 없거나 상한이면 끝
+      const 할일 = 후보들(지금.화면, 뺄, 로그인남음()).slice(0, 화면누름상한).map((x) => ({ 이름: x.이름, 깊이: 0 }));
+      const 목록있음 = 목록(지금.화면) !== undefined; // 없으면 밀려고 다시 띄우지 않는다
+      let 민수 = 0;
+      for (let i = 0; ; i++) {
+        if (i === 할일.length) {
+          if (!목록있음 || 민수 >= 스크롤상한 || 할일.length >= 화면누름상한) break;
+          if (시간끝()) return true;
+          const 자리 = await 보이게(목표, 민수, 할일.filter((x) => x.깊이 === 민수).map((x) => x.이름));
+          if (자리 === null || (민수 > 0 && 자리 === undefined) || !(await 민다())) break;
+          민수++;
+          const 새 = 후보들(지금.화면, 뺄, 로그인남음()).filter((x) => !할일.some((y) => y.이름 === x.이름));
+          if (새.length === 0) break;
+          할일.push(...새.slice(0, 화면누름상한 - 할일.length).map((x) => ({ 이름: x.이름, 깊이: 민수 })));
+        }
+        const { 이름, 깊이 } = 할일[i]!;
         if (시간끝()) return true;
-        if (지금.정보.key !== 목표.key && !(await 되돌린다(목표))) break;
-        // 다시 띄운 뒤면 위치가 달라졌을 수 있어 지금 화면에서 다시 찾는다. 다시 로그인을 다 썼으면 로그아웃은 여기서 빠진다
-        const x = 후보들(지금.화면, 뺄, 로그인남음()).find((h) => h.이름 === 이름);
+        const x = await 보이게(목표, 깊이, [이름]);
+        if (x === null) break;
         if (x === undefined) continue;
         const 로그아웃 = 안누를까닭(이름) === '로그아웃';
         const 앞 = 지금;
@@ -333,7 +386,7 @@ export async function crawl(
               r.stopped ??= 판이름(`--max ${상한.장}장`);
               return true;
             }
-            const 새 = 남길화면(지금, [...목표.path, 이름], 탈퇴말인가(이름), 상태);
+            const 새 = 남길화면(지금, [...목표.path, ...(깊이 > 0 ? [`↓${깊이}`] : []), 이름], 탈퇴말인가(이름), 상태);
             r.screens.push(새);
             // 로그인 판의 로그인 칸 화면은 남기기만 하고 안 돈다
             if (!풀림) 대기.push(새);

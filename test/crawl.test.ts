@@ -1,4 +1,4 @@
-// crawl 이 화면 셋 그래프를 도는지(새 화면 · 연결 · back · 재시작 + 경로 다시 누르기 · 다른 앱 · 상한) · 안 누를 것 · 확인 창과 화면 키 규칙을 본다
+// crawl 이 화면 셋 그래프를 도는지(새 화면 · 연결 · back · 재시작 + 경로 다시 누르기 · 다른 앱 · 상한 · 스크롤) · 안 누를 것 · 확인 창과 화면 키 규칙을 본다
 
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -22,12 +22,16 @@ interface 버튼 {
   api?: string;
 }
 
-// 버튼 i 는 [0,(i+1)*100][100,(i+1)*100+50] — 가운데 y 로 몇 번째인지 되찾는다
-function XML(틀: { desc?: string; id?: string }, 제목: string, 버튼들: 버튼[]): string {
-  const 줄 = 버튼들.map(
-    (b, i) =>
-      `<android.widget.${b.cls ?? 'Button'} text="${b.text ?? ''}" content-desc="${b.desc ?? ''}" resource-id="${b.id ?? ''}" password="${b.password === true}" clickable="true" bounds="[0,${(i + 1) * 100}][100,${(i + 1) * 100 + 50}]" />`,
-  );
+// 버튼 i 는 [0,(i+1)*100][100,(i+1)*100+50] — 가운데 y 로 몇 번째인지 되찾는다. 목록 줄(보이는 것만)은 버튼 뒤 번호로 스크롤 요소 안에 든다
+function XML(틀: { desc?: string; id?: string }, 제목: string, 버튼들: 버튼[], 목록줄?: 버튼[]): string {
+  const 칸 = (b: 버튼, i: number): string =>
+    `<android.widget.${b.cls ?? 'Button'} text="${b.text ?? ''}" content-desc="${b.desc ?? ''}" resource-id="${b.id ?? ''}" password="${b.password === true}" clickable="true" bounds="[0,${(i + 1) * 100}][100,${(i + 1) * 100 + 50}]" />`;
+  const 줄 = 버튼들.map(칸);
+  if (목록줄 !== undefined) {
+    줄.push(
+      `<androidx.recyclerview.widget.RecyclerView text="" content-desc="" resource-id="" clickable="false" scrollable="true" bounds="[0,${(버튼들.length + 1) * 100}][1080,1990]">${목록줄.map((b, j) => 칸(b, 버튼들.length + j)).join('')}</androidx.recyclerview.widget.RecyclerView>`,
+    );
+  }
   return `<hierarchy width="1080" height="2400">
   <android.widget.FrameLayout text="" content-desc="" resource-id="android:id/content" clickable="false" bounds="[0,0][1080,2400]">
     <android.view.ViewGroup text="" content-desc="${틀.desc ?? ''}" resource-id="${틀.id ?? ''}" clickable="false" bounds="[0,0][1080,2000]">
@@ -39,7 +43,8 @@ function XML(틀: { desc?: string; id?: string }, 제목: string, 버튼들: 버
 }
 
 // A → B(~to b) · A → C(글자만 — 좌표) · A → 다른 앱 · A 안에서 그대로(id) · B → C · C 에서는 back 이 안 먹는다
-type 그래프 = Record<string, { 틀: { desc?: string; id?: string }; 제목: string; 버튼: 버튼[]; 길: Record<string, string> }>;
+// 목록 = 스크롤 요소 안 줄 — 한 번에 창크기 줄만 보이고 위로 밀면 창크기만큼 내려간다(끝에서 멈춘다)
+type 그래프 = Record<string, { 틀: { desc?: string; id?: string }; 제목: string; 버튼: 버튼[]; 길: Record<string, string>; 목록?: 버튼[] }>;
 const 기본: 그래프 = {
   A: {
     틀: { desc: 'a screen' },
@@ -124,6 +129,12 @@ let 입력: Record<string, string> = {};
 let clearApp막힘 = false;
 const 그래프 = (): 그래프 => (로그인됨 && 안화면들 !== null ? 안화면들 : 화면들);
 const 이름 = (b: 버튼): string => b.desc || b.id || b.text || '';
+let 창크기 = 3;
+// 화면마다 목록이 내려간 줄 수 — 새로 가면 0, 앱을 다시 띄우면 다 0, back 으로 돌아오면 남는다(돌아옴자리버림이면 0)
+let 내림: Record<string, number> = {};
+let 돌아옴자리버림 = false;
+const 보이는목록 = (위: string): 버튼[] | undefined => 그래프()[위]!.목록?.slice(내림[위] ?? 0, (내림[위] ?? 0) + 창크기);
+const 보임 = (위: string): 버튼[] => [...그래프()[위]!.버튼, ...(보이는목록(위) ?? [])];
 
 const fetchMock = vi.fn();
 const env = { PLATFORM_APPIUM_URL: 'http://farm:4723/wd/hub', PLATFORM_APP: '/apk/dev.apk' };
@@ -135,7 +146,7 @@ let 로그: string[] = [];
 
 function 누름(i: number): void {
   const 위 = 쌓임.at(-1)!;
-  const b = 그래프()[위]!.버튼[i]!;
+  const b = 보임(위)[i]!;
   눌림.push(`${위} ${이름(b)}`);
   if (b.api !== undefined) 로그.push(`10-20 10:07:55.318  4242  4300 I okhttp.OkHttpClient: --> GET https://api.shop/${b.api}?token=t1`);
   const 다음 = 그래프()[위]!.길[이름(b)];
@@ -146,7 +157,10 @@ function 누름(i: number): void {
   } else if (다음 === '로그아웃') {
     로그인됨 = false;
     쌓임.push('P');
-  } else if (다음 !== undefined) 쌓임.push(다음);
+  } else if (다음 !== undefined) {
+    쌓임.push(다음);
+    내림[다음] = 0;
+  }
 }
 
 beforeEach(async () => {
@@ -154,7 +168,7 @@ beforeEach(async () => {
   process.chdir(mkdtempSync(join(tmpdir(), 'appium-cli-')));
   쌓임 = ['A'];
   화면들 = 기본;
-  [안화면들, 로그인됨, 입력, clearApp막힘] = [null, false, {}, false];
+  [안화면들, 로그인됨, 입력, clearApp막힘, 창크기, 내림, 돌아옴자리버림] = [null, false, {}, false, 3, {}, false];
   로그 = ['10-20 10:00:00.000  4242  4300 I okhttp.OkHttpClient: --> GET https://api.shop/old'];
   fetchMock.mockReset();
   fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
@@ -169,16 +183,16 @@ beforeEach(async () => {
     }
     if (path.endsWith('/source')) {
       const h = 그래프()[위]!;
-      return 답(XML(h.틀, h.제목, h.버튼));
+      return 답(XML(h.틀, h.제목, h.버튼, 보이는목록(위)));
     }
     if (path.endsWith('/current_activity')) return 답(위 === 'X' ? '.Browser' : '.Main');
     if (path.endsWith('/current_package')) return 답(위 === 'X' ? 'com.android.chrome' : 'com.shop');
     if (path.endsWith('/element')) {
-      const i = 그래프()[위]!.버튼.findIndex((b) => (b.desc ?? b.id) === body.value);
+      const i = 보임(위).findIndex((b) => (b.desc ?? b.id) === body.value);
       return i < 0 ? new Response(JSON.stringify({ value: { error: 'no such element', message: 'none' } }), { status: 404 }) : 답({ 'element-6066-11e4-a5ab-c8d2b5b44a87': String(i) });
     }
     const 넣은요소 = /\/element\/(\d+)\/value$/.exec(path);
-    if (넣은요소) 입력[이름(그래프()[위]!.버튼[Number(넣은요소[1])]!)] = String(body.text);
+    if (넣은요소) 입력[이름(보임(위)[Number(넣은요소[1])]!)] = String(body.text);
     const 눌린요소 = /\/element\/(\d+)\/click$/.exec(path);
     if (눌린요소) 누름(Number(눌린요소[1]));
     if (path.endsWith('/actions')) {
@@ -188,10 +202,17 @@ beforeEach(async () => {
     if (path.endsWith('/back')) {
       부름.push('back');
       if (위 !== 'C' && 쌓임.length > 1) 쌓임.pop();
+      if (돌아옴자리버림) 내림[쌓임.at(-1)!] = 0;
     }
     if (path.endsWith('/execute/sync')) {
-      const { script, args } = body as { script: string; args: { appId: string }[] };
+      const { script, args } = body as { script: string; args: { appId?: string; direction?: string }[] };
+      if (script === 'mobile: swipeGesture') {
+        부름.push(`swipe ${args[0]!.direction}`);
+        내림[위] = Math.min((내림[위] ?? 0) + 창크기, Math.max(0, (그래프()[위]!.목록?.length ?? 0) - 창크기));
+        return 답(null);
+      }
       부름.push(`${script} ${args[0]!.appId}`);
+      내림 = {};
       if (script === 'mobile: clearApp' && clearApp막힘) return new Response(JSON.stringify({ value: { error: 'unknown error', message: 'not allowed' } }), { status: 500 });
       if (script === 'mobile: clearApp') [로그인됨, 입력] = [false, {}];
       쌓임 = script === 'mobile: activateApp' ? ['A'] : [];
@@ -334,6 +355,82 @@ describe('crawl', () => {
     expect(눌림).toEqual(['A go_d', 'A go_d']);
     expect((fetchMock.mock.calls as [string][]).filter(([u]) => u.endsWith('/actions'))).toHaveLength(2);
     expect(결과().screens.map((s) => s.key)).toEqual(['app:.Main/a screen', 'app:.Main/d screen']);
+  });
+
+  const 줄들 = (n: number): 버튼[] => Array.from({ length: n }, (_, k) => ({ desc: `r${k + 1}` }));
+
+  it('후보를 다 누른 뒤 목록을 위로 밀어 새 후보를 누르고, 새 후보가 없으면 그만 민다 — 밀어도 화면 키는 그대로다', async () => {
+    화면들 = {
+      A: { 틀: { desc: 'a screen' }, 제목: 'Home', 버튼: [{ desc: 'top' }], 길: { r6: 'R' }, 목록: 줄들(7) },
+      R: { 틀: { desc: 'r screen' }, 제목: 'Row', 버튼: [], 길: {} },
+    };
+
+    await run(['-s=c', 'crawl'], env);
+
+    // r4 ~ r6 은 한 번, r7 은 두 번 민 뒤에 보인다. 마지막 'A r6' 은 R 로 가는 경로 다시 누르기다
+    expect(눌림).toEqual(['A top', 'A r1', 'A r2', 'A r3', 'A r4', 'A r5', 'A r6', 'A r7', 'A r6']);
+    expect(부름).toEqual([
+      'swipe up', // r4 ~ r6
+      'back', // R → A (목록 자리는 남는다)
+      'swipe up', // r7
+      'swipe up', // 끝 — 새 후보 없음
+      'mobile: terminateApp com.shop',
+      'mobile: activateApp com.shop',
+      'swipe up', // R 로 가는 경로의 ↓1
+    ]);
+    expect(결과().screens.map((s) => [s.key, s.path])).toEqual([
+      ['app:.Main/a screen', []],
+      ['app:.Main/r screen', ['↓1', 'r6']],
+    ]);
+    // 스크롤 요소 자리에서 민다
+    const 민몸 = (fetchMock.mock.calls as [string, RequestInit][]).find(([, i]) => String(i.body).includes('swipeGesture'))![1].body;
+    expect(JSON.parse(String(민몸))).toEqual({ script: 'mobile: swipeGesture', args: [{ left: 0, top: 200, width: 1080, height: 1790, direction: 'up', percent: 0.75 }] });
+  });
+
+  it('back 뒤 목록이 처음으로 가는 앱이면 다시 밀어 누르고, 스크롤 뒤 화면 밑 화면도 앱을 다시 띄워 경로(↓ 포함)로 간다', async () => {
+    돌아옴자리버림 = true;
+    화면들 = {
+      A: { 틀: { desc: 'a screen' }, 제목: 'Home', 버튼: [], 길: { r4: 'S' }, 목록: 줄들(6) },
+      S: { 틀: { desc: 's screen' }, 제목: 'Ess', 버튼: [{ desc: 'to t' }], 길: { 'to t': 'T' } },
+      T: { 틀: { desc: 't screen' }, 제목: 'Tee', 버튼: [], 길: {} },
+    };
+
+    await run(['-s=c', 'crawl'], env);
+
+    expect(눌림).toEqual(['A r1', 'A r2', 'A r3', 'A r4', 'A r5', 'A r6', 'A r4', 'S to t', 'A r4', 'S to t']);
+    expect(부름).toEqual([
+      'swipe up', // r4 ~ r6
+      'back', // S → A, 목록이 처음으로
+      'swipe up', // r5 를 찾아 다시 민다 — 재시작 없이
+      'swipe up', // 끝
+      'mobile: terminateApp com.shop',
+      'mobile: activateApp com.shop',
+      'swipe up', // S 로: ↓1 · r4
+      'back', // T → S
+      'mobile: terminateApp com.shop',
+      'mobile: activateApp com.shop',
+      'swipe up', // T 로: ↓1 · r4 · to t
+    ]);
+    expect(결과().screens.map((s) => [s.key, s.path])).toEqual([
+      ['app:.Main/a screen', []],
+      ['app:.Main/s screen', ['↓1', 'r4']],
+      ['app:.Main/t screen', ['↓1', 'r4', 'to t']],
+    ]);
+    expect(결과().restarts).toBe(2);
+  });
+
+  it.each([
+    [3, 5, 18], // 화면당 다섯 번까지만 민다
+    [8, 3, 30], // 화면당 누름 30 번을 넘기지 않는다
+  ])('보이는 줄 %i 개 — %i 번 밀고 %i 개를 누른다', async (보이는줄, 민수, 누른수) => {
+    창크기 = 보이는줄;
+    화면들 = { A: { 틀: { desc: 'a screen' }, 제목: 'Home', 버튼: [], 길: {}, 목록: 줄들(60) } };
+
+    await run(['-s=c', 'crawl'], env);
+
+    expect(부름.filter((x) => x === 'swipe up')).toHaveLength(민수);
+    expect(눌림).toEqual(줄들(누른수).map((b) => `A ${b.desc}`));
+    expect(결과().screens.map((s) => s.key)).toEqual(['app:.Main/a screen']);
   });
 
   it('--max 는 1 ~ 100 장만 받는다', async () => {
@@ -654,6 +751,13 @@ describe('화면을가린다', () => {
 
   it('이름 없는 버튼은 자손의 첫 desc · 글자로 부르고, 같은 이름은 앞 것만 누른다', () => {
     expect(후보들(parseSource(서랍XML(false))).map((x) => x.이름)).toEqual(['open menu', 'store item text']);
+  });
+
+  it('목록을 밀어 보이는 줄이 바뀌어도 키는 컨테이너에서 나와 그대로다', () => {
+    const 키 = (줄: 버튼[]): string => 화면을가린다(parseSource(XML({ desc: 'list screen' }, 'Shop', [{ desc: 'top' }], 줄)), '.Main').key;
+
+    expect(키([{ desc: 'r1' }, { desc: 'r2' }])).toBe('app:.Main/list screen');
+    expect(키([{ desc: 'r5' }, { text: '더 보기', cls: 'TextView' }])).toBe('app:.Main/list screen');
   });
 
   it('이름표가 없으면 구조 지문 — 글자 · 숫자만 바뀌면 같고 짜임이 바뀌면 다르다', () => {
