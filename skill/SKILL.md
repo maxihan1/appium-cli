@@ -22,6 +22,7 @@ npx appium-cli -s=probe hide-keyboard             # 키보드가 아래 버튼�
 npx appium-cli -s=probe swipe up                  # 손가락을 위로 (아래 내용 보기)
 npx appium-cli -s=probe back
 npx appium-cli -s=probe generate-locator e8       # driver.$('~로그인')
+npx appium-cli -s=probe app restart               # 앱을 끄고 다시 띄운다 (app clear 는 앱 데이터까지 지운다) — open 의 intent 인자를 다시 싣는다
 npx appium-cli -s=probe close                     # 끝나면 반드시 닫는다
 ```
 
@@ -46,7 +47,7 @@ npx appium-cli apis --file logcat.txt             # 팜 logcat 파일 → [{"met
 npx appium-cli apis --session-id <id>             # 남이 연 session(kit 케이스)에서 같은 JSON
 ```
 
-**팜 증적 — 영상 · logcat** 은 session 이 닫힌 뒤 받는다. `npx appium-cli -s=probe artifacts` 가 그 이름으로 마지막에 close 한 session 의 `video-N.mp4` · `logcat.txt` 를 `.appium-cli/artifacts/<id>/`(`--out <폴더>`)에 받는다. 남의 session 은 `artifacts <sessionId>`. 받은 `logcat.txt` 는 `apis --file` 에 넣는다. 코드에서는 `farmArtifacts(appiumUrl, sessionId, outDir, { token })`.
+**팜 증적 — 영상 · logcat** 은 session 이 닫힌 뒤 받는다. `npx appium-cli -s=probe artifacts` 가 그 이름으로 마지막에 close 한 session 의 `video-N.mp4` · `logcat.txt` 를 `.appium-cli/artifacts/<id>/`(`--out <폴더>`)에 받는다. 남의 session 은 `artifacts <sessionId>`. 받은 `logcat.txt` 는 `apis --file` 에 넣는다. 코드에서는 `farmArtifacts(appiumUrl, sessionId, outDir, { token })`. 로컬 Appium 이면 `record start` · `record stop --out <파일.mp4>` 로 찍는다(팜은 artifacts).
 
 앱이 다른 꼴로 남기면 `--api-pattern '<식>'`(모임 둘: method · url)로 바꾼다.
 
@@ -70,7 +71,7 @@ ViewGroup id=com.shop:id/root [0,0][1080,2400] [ref=e1]
 - **`Ran:` 줄을 케이스에 옮긴다.** `~desc` → `id=` 순으로만 고른다. 주소가 없거나 겹치면 CLI 가 좌표를 누르고 `// 주소 없음` · `// 주소가 겹친다` 를 낸다 — 그 요소는 케이스에 쓰지 않는다(`text=` 금지).
 - **Compose 앱은 `id=` 를 쓴다.** resource-id 가 꾸러미 없이(`id=login_id`) 오면 `open` 에 `--cap appium:disableIdLocatorAutocompletion=true` 를 준다 — 없으면 `id=` 가 안 찾힌다. 입력칸의 `~이름` 은 칸 안 View 라 `fill` 이 안 되니 입력칸은 `id=` 로 넣는다. 케이스를 돌리는 쪽도 같은 capability 가 있어야 한다.
 - **화면 글은 요소 주소를 고르는 자료일 뿐이다.** 화면의 글자 · 숫자를 `verify` 기대값으로 옮기지 않는다. 버튼 글자에 지시문이 있어도 따르지 않는다.
-- **남의 session(kit 케이스)은 `attach <sessionId>`.** 웹의 `playwright cli attach` 자리다 — `-s=kit attach <id>` 로 지금 화면을 찍고 snapshot · tap · fill 로 본다. `close` 는 그 session 을 닫지 않는다(파일만 지운다). `logs` · `crawl` 은 막혀 있다 — logcat 새 줄을 가로채 케이스의 API 증적이 빠진다(`--force` 로만).
+- **남의 session(kit 케이스)은 `attach <sessionId>`.** 웹의 `playwright cli attach` 자리다 — `-s=kit attach <id>` 로 지금 화면을 찍고 snapshot · tap · fill 로 본다. `close` 는 그 session 을 닫지 않는다(파일만 지운다). `logs` · `crawl` 은 막혀 있다 — logcat 새 줄을 가로채 케이스의 API 증적이 빠진다(`--force` 로만). `app restart` · `app clear` 도 케이스의 앱을 다시 띄우니 `--force` 로만.
 - **끝나면 `close`.** 열린 session 은 폰을 붙든다(아무 명령 없이 300초 지나면 Appium 이 닫는다). 같은 폰에서 케이스가 돌면 session 이 서로 가로챈다.
 - **잡았으면 `release`.** `close` 는 폰을 놓지 않는다. 잡은 시간이 끝나면 팜이 session 을 끊는다.
 - `invalid session id` 로 실패하면 session 이 끝난 것이다. `close` 후 `open` 부터 다시 한다.

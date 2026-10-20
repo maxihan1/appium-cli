@@ -2,7 +2,7 @@
 
 import { createHash } from 'node:crypto';
 
-import { logcat을읽는다, 가라앉기, 부른다, 요소를찾는다, 좌표를누른다, 화면을기다린다, type 연결 } from './appium.js';
+import { logcat을읽는다, 가라앉기, 띄우기, 부른다, 요소를찾는다, 좌표를누른다, 화면을기다린다, type 띄운앱, type 연결 } from './appium.js';
 import { 기록글, type 상태 } from './crawl-out.js';
 import { apiLines } from './logcat.js';
 import { center, locatorFor, w3c, type 요소, type 화면 } from './platform/android.js';
@@ -194,6 +194,8 @@ export interface 로그인방법 {
   역할: string;
   // 로그인 스크립트를 돌린다 — 앱을 비우고 띄운 뒤 부르고, 끝나면 앱 첫 화면(로그인한)이어야 한다
   돌린다: () => Promise<void>;
+  // open 이 띄운 앱 — 앱을 비운 뒤 같은 intent 인자로 다시 띄운다(데모마켓 서버 주소 — F6-05). 없으면 activateApp
+  앱?: 띄운앱;
 }
 
 /**
@@ -320,8 +322,9 @@ export async function crawl(
     return true;
   };
 
-  // 앱 데이터를 지우고(팜이 막으면 앱만 끄고) 띄운 뒤 로그인 스크립트. 로그인하며 찍힌 API 는 어느 화면 몫도 아니라 버린다
+  // 앱 데이터를 지우고(팜이 막으면 앱만 끄고) open 때 intent 인자로 띄운 뒤 로그인 스크립트. 로그인하며 찍힌 API 는 어느 화면 몫도 아니라 버린다
   const 로그인한다 = async (로그인: 로그인방법): Promise<void> => {
+    const 띄움 = 띄우기(app, 로그인.앱);
     r.앱비우기 = await 앱에('mobile: clearApp').then(
       () => 'mobile: clearApp' as const,
       async () => {
@@ -329,7 +332,7 @@ export async function crawl(
         return 'mobile: terminateApp' as const;
       },
     );
-    await 앱에('mobile: activateApp');
+    await 부른다(c, 'POST', `/session/${sid}/execute/sync`, { script: 띄움.script, args: [띄움.arg] });
     await 로그인.돌린다();
     지금 = await 본다(c, sid);
     if (API봄) await logcat을읽는다(c, sid).catch(() => []);

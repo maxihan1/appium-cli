@@ -175,7 +175,7 @@ beforeEach(async () => {
     const path = url.replace('http://farm:4723/wd/hub', '');
     const body = init.body === undefined ? {} : (JSON.parse(init.body as string) as Record<string, unknown>);
     const 위 = 쌓임.at(-1)!;
-    if (path === '/session') return 답({ sessionId: 's-1' });
+    if (path === '/session') return 답({ sessionId: 's-1', capabilities: { appPackage: 'com.shop', appActivity: '.Main' } });
     if (path.endsWith('/se/log')) {
       const 줄 = 로그.map((message) => ({ timestamp: 0, level: 'ALL', message }));
       로그 = [];
@@ -216,11 +216,11 @@ beforeEach(async () => {
         내림[위] = Math.min((내림[위] ?? 0) + 창크기, Math.max(0, (그래프()[위]!.목록?.length ?? 0) - 창크기));
         return 답(null);
       }
-      부름.push(`${script} ${args[0]!.appId}`);
+      부름.push(`${script} ${args[0]!.appId ?? JSON.stringify(args[0])}`);
       내림 = {};
       if (script === 'mobile: clearApp' && clearApp막힘) return new Response(JSON.stringify({ value: { error: 'unknown error', message: 'not allowed' } }), { status: 500 });
       if (script === 'mobile: clearApp') [로그인됨, 입력] = [false, {}];
-      쌓임 = script === 'mobile: activateApp' ? ['A'] : [];
+      쌓임 = script === 'mobile: activateApp' || script === 'mobile: startActivity' ? ['A'] : [];
     }
     return 답(null);
   });
@@ -743,6 +743,27 @@ describe('crawl --login', () => {
     const 비움 = 부름.indexOf('mobile: clearApp com.shop');
     expect(부름.slice(비움, 비움 + 4)).toEqual(['mobile: clearApp com.shop', 'mobile: activateApp com.shop', 'mobile: performEditorAction done', 'hide-keyboard']);
     expect(읽기('summary.json')).toMatchObject({ 상태들: ['로그아웃', 로그인판], 예외: false });
+  });
+
+  it('open 이 intent 인자를 보냈으면 앱을 비운 뒤 activateApp 대신 같은 extras 로 mobile: startActivity 한다 (데모마켓 서버 주소)', async () => {
+    await run(['-s=c', 'close'], env);
+    await run(['-s=c', 'open', '--cap', 'appium:optionalIntentArguments=--es server http://172.25.28.63:3002'], env);
+    부름 = [];
+
+    await run(['-s=c', 'crawl', '--login', 'login.txt', '--max', '40'], env);
+
+    const 띄움 = `mobile: startActivity ${JSON.stringify({ intent: 'com.shop/.Main', extras: [['s', 'server', 'http://172.25.28.63:3002']] })}`;
+    const 비움 = 부름.indexOf('mobile: clearApp com.shop');
+    expect(부름.slice(비움, 비움 + 2)).toEqual(['mobile: clearApp com.shop', 띄움]);
+    expect(부름.filter((x) => x === 'mobile: clearApp com.shop')).toHaveLength(부름.filter((x) => x === 띄움).length);
+    expect(읽기('summary.json')).toMatchObject({ 상태들: ['로그아웃', 로그인판], 예외: false });
+
+    // 못 옮기는 intent 인자면 로그아웃 판을 돌기 전에 거절한다
+    await run(['-s=c', 'close'], env);
+    await run(['-s=c', 'open', '--cap', 'appium:optionalIntentArguments=-f 0x10'], env);
+    fetchMock.mockClear();
+    await expect(run(['-s=c', 'crawl', '--login', 'login.txt'], env)).rejects.toThrow('mobile: startActivity extras 로 못 옮긴다');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it.each([

@@ -25,6 +25,8 @@ npx appium-cli -s=probe fill e11 'bob@example.com'
 npx appium-cli -s=probe fill e12 '10203040' --submit   # 넣은 뒤 키보드 완료(mobile: performEditorAction done) — Ran 줄 둘
 npx appium-cli -s=probe hide-keyboard          # 키보드가 아래 버튼을 가리면 — Ran: await driver.hideKeyboard()
 npx appium-cli -s=probe generate-locator e17   # driver.$('~Login button')
+npx appium-cli -s=probe app restart            # Ran: await driver.terminateApp('…') · activateApp — 새 화면
+npx appium-cli -s=probe app clear              # Ran: mobile: clearApp — 앱 데이터를 지우고 다시 띄운다
 npx appium-cli -s=probe close
 npx appium-cli release                         # 놓는다 — 팜이 깐 앱 · 앱 데이터를 지운다
 ```
@@ -60,6 +62,15 @@ npx appium-cli apis --file .appium-cli/artifacts/<id>/logcat.txt
 ```
 
 팜이 아직 만드는 중(`ready:false`)이면 15초까지 기다린다.
+
+`app restart` · `app clear` 는 open 이 보낸 intent 인자(`--cap appium:optionalIntentArguments=…`)가 있으면 `activateApp` 대신 `mobile: startActivity`(`intent: <꾸러미>/<activity>` · 같은 extras)로 다시 띄운다 — 서버 주소를 intent 로 받아 앱 데이터에 두는 앱(데모마켓)이 clear 뒤에도 같은 서버로 간다. `crawl --login` 도 판 사이에 같은 길로 띄운다. extras 깃발(`-e` · `--es` · `--esn` · `--ez` · `--ei` · `--el` · `--ef` · `--eu`)만 옮기고, 다른 인자면 앱을 건드리기 전에 거절한다. 붙은 session 은 `--force` 가 있어야 한다.
+
+로컬 Appium(팜 아님)에서 영상이 필요하면 `record` 로 찍는다. 팜은 session 마다 영상을 남기니 `artifacts` 를 쓴다.
+
+```bash
+npx appium-cli -s=probe record start
+npx appium-cli -s=probe record stop --out run.mp4   # - Video: run.mp4 (기본 .appium-cli/record-<시각>.mp4)
+```
 
 남이 연 session(kit 케이스 디버깅)에는 `attach` 로 붙는다. session 을 새로 열지 않고 지금 화면만 찍는다. `close` 는 그 session 을 닫지 않고 CLI 파일만 지운다(`.last` 도 안 남긴다).
 

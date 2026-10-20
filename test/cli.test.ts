@@ -28,6 +28,7 @@ function 가짜(): void {
     if (path.endsWith('/source')) return 답(화면XML);
     if (path.endsWith('/element')) return 답({ 'element-6066-11e4-a5ab-c8d2b5b44a87': 'el-9' });
     if (path.endsWith('/screenshot')) return 답(Buffer.from('png').toString('base64'));
+    if (path.endsWith('/current_package')) return 답('com.shop');
     return 답(init.method === 'DELETE' ? null : {});
   });
 }
@@ -504,6 +505,86 @@ describe('attach', () => {
     fetchMock.mockResolvedValueOnce(답([]));
     expect(await run(['-s=kit', 'logs', '--force'], env)).toBe('쌓인 줄 0개를 버렸다 — 다음 logs 부터 새 줄만 낸다');
     expect(부른길()).toEqual(['POST /session/kit-7/se/log']);
+  });
+});
+
+describe('app · record', () => {
+  const 실행들 = (): unknown[] =>
+    (fetchMock.mock.calls as [string, RequestInit][]).filter(([u]) => u.endsWith('/execute/sync')).map(([, i]) => JSON.parse(i.body as string) as unknown);
+  // session 답에 UiAutomator2 처럼 appPackage · appActivity 를 싣고 --cap 으로 intent 인자를 보낸 session
+  async function 인텐트로연다(인자: string): Promise<void> {
+    await run(['-s=probe', 'close'], env);
+    fetchMock.mockResolvedValueOnce(답({ sessionId: 's-2', capabilities: { appPackage: 'com.shop', appActivity: '.MainActivity' } }));
+    await run(['-s=probe', 'open', '--cap', `appium:optionalIntentArguments=${인자}`], env);
+    fetchMock.mockClear();
+  }
+
+  it('app clear 는 앱 데이터를 지운 뒤 open 의 intent 인자를 mobile: startActivity extras 로 다시 싣고 새 화면을 찍는다', async () => {
+    await 인텐트로연다("--es server http://host:3002 --ez debug true --esn none --es name 'a b'");
+    expect(JSON.parse(readFileSync('.appium-cli/probe.json', 'utf8')).앱).toEqual({
+      appPackage: 'com.shop',
+      appActivity: '.MainActivity',
+      optionalIntentArguments: "--es server http://host:3002 --ez debug true --esn none --es name 'a b'",
+    });
+
+    const out = await run(['-s=probe', 'app', 'clear'], env);
+
+    const 띄움 = { intent: 'com.shop/.MainActivity', extras: [['s', 'server', 'http://host:3002'], ['z', 'debug', 'true'], ['sn', 'none'], ['s', 'name', 'a b']] };
+    expect(실행들()).toEqual([
+      { script: 'mobile: clearApp', args: [{ appId: 'com.shop' }] },
+      { script: 'mobile: startActivity', args: [띄움] },
+    ]);
+    expect(부른길().at(-1)).toBe('GET /session/s-2/source');
+    expect(out.split('\n').slice(0, 2)).toEqual([
+      "Ran: await driver.execute('mobile: clearApp', { appId: 'com.shop' })",
+      `Ran: await driver.execute('mobile: startActivity', ${JSON.stringify(띄움)})`,
+    ]);
+    expect(out).toMatch(/\n- Snapshot: /);
+  });
+
+  it('app restart 는 intent 인자가 없으면 지금 앱 꾸러미로 terminateApp · activateApp 한다', async () => {
+    const out = await run(['-s=probe', 'app', 'restart'], env);
+
+    expect(부른길()).toEqual([
+      'GET /session/s-1/appium/device/current_package',
+      'POST /session/s-1/execute/sync',
+      'POST /session/s-1/execute/sync',
+      'GET /session/s-1/source',
+    ]);
+    expect(실행들()).toEqual([
+      { script: 'mobile: terminateApp', args: [{ appId: 'com.shop' }] },
+      { script: 'mobile: activateApp', args: [{ appId: 'com.shop' }] },
+    ]);
+    expect(out.split('\n').slice(0, 2)).toEqual(["Ran: await driver.terminateApp('com.shop')", "Ran: await driver.activateApp('com.shop')"]);
+  });
+
+  it('못 옮기는 intent 인자 · 모르는 하위 명령은 앱을 건드리기 전에 던진다', async () => {
+    await 인텐트로연다('--activity-clear-top --es server http://host:3002');
+
+    await expect(run(['-s=probe', 'app', 'clear'], env)).rejects.toThrow('「--activity-clear-top --es server http://host:3002」 를 mobile: startActivity extras 로 못 옮긴다');
+    await expect(run(['-s=probe', 'app', 'stop'], env)).rejects.toThrow('app 은 restart · clear 다');
+    expect(실행들()).toEqual([]);
+  });
+
+  it('붙은 session 은 --force 없이 거절한다', async () => {
+    await run(['-s=kit', 'attach', 'kit-7'], env);
+    fetchMock.mockClear();
+
+    await expect(run(['-s=kit', 'app', 'clear'], env)).rejects.toThrow('케이스가 쓰는 앱을 다시 띄운다');
+    expect(부른길()).toEqual([]);
+    await run(['-s=kit', 'app', 'restart', '--force'], env);
+    expect(실행들()).toHaveLength(2);
+  });
+
+  it('record start · stop 은 녹화 주소를 부르고 받은 base64 를 mp4 로 쓴다', async () => {
+    expect(await run(['-s=probe', 'record', 'start'], env)).toBe('녹화 시작 — 끝나면 record stop [--out <파일.mp4>]');
+    fetchMock.mockResolvedValueOnce(답(Buffer.from('mp4!').toString('base64')));
+    expect(await run(['-s=probe', 'record', 'stop', '--out', 'v.mp4'], env)).toBe('- Video: v.mp4');
+
+    expect(부른길()).toEqual(['POST /session/s-1/appium/start_recording_screen', 'POST /session/s-1/appium/stop_recording_screen']);
+    expect(readFileSync('v.mp4', 'utf8')).toBe('mp4!');
+    fetchMock.mockResolvedValueOnce(답(''));
+    await expect(run(['-s=probe', 'record', 'stop'], env)).rejects.toThrow('받은 영상이 비었다');
   });
 });
 

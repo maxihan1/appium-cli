@@ -5,7 +5,7 @@ import { homedir } from 'node:os';
 import { dirname, join, parse, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
 
-import { logcat을읽는다, 가라앉기, 산출물을받는다, 연결주소, 부른다, 요소를찾는다, 좌표를누른다, 화면을기다린다, type 연결 } from './appium.js';
+import { logcat을읽는다, 가라앉기, 띄우기, 산출물을받는다, 연결주소, 부른다, 요소를찾는다, 좌표를누른다, 화면을기다린다, type 띄운앱, type 연결 } from './appium.js';
 import { crawl, 본다 } from './crawl.js';
 import { 결과파일들, 상태인가, 저장본모양 } from './crawl-out.js';
 import { apiLines } from './logcat.js';
@@ -31,6 +31,8 @@ interface 세션 {
   logcat읽음?: boolean;
   // attach 로 남의 session(kit 케이스)에 붙었다 — close 가 그 session 을 닫지 않는다
   붙음?: boolean;
+  // open 이 띄운 앱 꾸러미 · activity · intent 인자 — app restart · clear · crawl --login 이 이것으로 다시 띄운다
+  앱?: 띄운앱;
 }
 
 export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
@@ -50,6 +52,9 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
   generate-locator <ref>             webdriverio 선택자
   attrs <ref>                        그 요소의 원래 XML 속성 (한 줄에 키=값 · 비밀번호 칸 text 는 안 낸다)
   screen                             지금 화면 키 · 이름 (crawl 과 같은 키 — 앱 화면 파일의 화면 주소 값)
+  app restart | clear                앱을 다시 띄운다 (clear 는 앱 데이터를 지운 뒤) — open 의 intent 인자(optionalIntentArguments)를 다시 싣는다
+                                     붙은 session 은 --force 가 있어야 한다 (남의 앱을 다시 띄운다)
+  record start | stop [--out <파일.mp4>]   화면 녹화 (로컬 Appium 용 — 팜은 artifacts 의 video-N.mp4)
   close                              session 을 닫는다 (번호를 남겨 artifacts 가 쓴다)
   list                               열린 session 목록
   logs [--grep <식>] [--api]          logcat 새 줄 (첫 호출은 쌓인 줄을 버린다) · --api 면 API 줄만 METHOD URL
@@ -328,9 +333,17 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
     const 더 = 캡읽기(values.cap ?? []);
     const 열림 = (await 부른다(c, 'POST', '/session', {
       capabilities: { alwaysMatch: { ...capabilities(app, values.udid ?? env.PLATFORM_DEVICE_UDID, values.filter), ...더 } },
-    })) as { sessionId?: string } | undefined;
+    })) as { sessionId?: string; capabilities?: Record<string, unknown> } | undefined;
     if (열림?.sessionId === undefined) throw new Error('Appium 이 session 번호를 주지 않았다');
-    const s: 세션 = { sessionId: 열림.sessionId, snapshot: null, refs: {}, width: 0, height: 0 };
+    // UiAutomator2 는 apk 에서 읽은 appPackage · appActivity 를 session 답에 싣는다(접두 없이 — 있으면 appium: 도 본다). 답에 없으면 보낸 값
+    const 캡 = { ...Object.fromEntries(Object.entries(더).map(([k, v]) => [k.replace(/^appium:/, ''), v])), ...열림.capabilities };
+    const 앱 = Object.fromEntries(
+      (['appPackage', 'appActivity', 'optionalIntentArguments'] as const).flatMap((k) => {
+        const v = 캡[k] ?? 캡[`appium:${k}`];
+        return typeof v === 'string' ? [[k, v]] : [];
+      }),
+    ) as 띄운앱;
+    const s: 세션 = { sessionId: 열림.sessionId, snapshot: null, refs: {}, width: 0, height: 0, 앱 };
     await 적는다(파일, s);
     const 찍음 = await 찍는다(c, s, false);
     await 적는다(파일, s);
@@ -343,6 +356,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
   if (s.붙음 === true && (명령 === 'logs' || 명령 === 'crawl') && values.force !== true) {
     throw new Error(`붙은 session 에서 ${명령} 를 하면 logcat 새 줄을 가로채 케이스 쪽에서 사라진다${명령 === 'crawl' ? ' (앱도 다시 띄운다)' : ''} — 그래도 하려면 --force`);
   }
+  if (s.붙음 === true && 명령 === 'app' && values.force !== true) throw new Error('붙은 session 에서 app 을 하면 케이스가 쓰는 앱을 다시 띄운다(clear 는 데이터도 지운다) — 그래도 하려면 --force');
 
   switch (명령) {
     case 'snapshot': {
@@ -386,9 +400,11 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       const 역할 = values.role ?? '일반 회원'; // test_platform `기본역할`(@platform/kit/accounts)
       if (!상태인가(`로그인:${역할}`)) throw new Error(`--role 은 앞뒤 빈칸 없이 40자까지다: ${역할}`);
       const 줄들 = values.login === undefined ? null : 스크립트읽기(await readFile(values.login, 'utf8'));
+      if (줄들 !== null) 띄우기('', s.앱); // 판 사이에 다시 띄울 intent 인자도
       const 연결인자 = [...(values.url === undefined ? [] : ['--url', values.url]), ...(values.token === undefined ? [] : ['--token', values.token])];
       const 로그인 = 줄들 === null ? undefined : {
         역할,
+        ...(s.앱 === undefined ? {} : { 앱: s.앱 }),
         돌린다: async (): Promise<void> => {
           for (const 줄 of 줄들) await run([`-s=${이름}`, ...줄, ...연결인자], env);
         },
@@ -432,6 +448,19 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       const 앞 = ['class', 'resource-id', 'content-desc', 'text', 'hint'].filter((k) => k in el.속성);
       const 키들 = [...앞, ...Object.keys(el.속성).filter((k) => !앞.includes(k)).sort()];
       return 키들.map((k) => `${k}=${el.속성[k]!.replace(/\n/g, '\\n')}`).join('\n');
+    }
+    case 'record': {
+      // 로컬 Appium 용 — 팜은 session 마다 영상을 남긴다(artifacts)
+      if (인자[0] === 'start') {
+        await 부른다(c, 'POST', `/session/${sid}/appium/start_recording_screen`, {});
+        return '녹화 시작 — 끝나면 record stop [--out <파일.mp4>]';
+      }
+      if (인자[0] !== 'stop') throw new Error('record 는 start · stop 이다');
+      const b64 = await 부른다(c, 'POST', `/session/${sid}/appium/stop_recording_screen`, {});
+      if (typeof b64 !== 'string' || b64 === '') throw new Error('받은 영상이 비었다 — record start 를 먼저 했는지 본다');
+      const 영상 = values.out ?? join(폴더, `record-${Date.now()}.mp4`);
+      await writeFile(영상, Buffer.from(b64, 'base64'));
+      return `- Video: ${영상}`;
     }
     case 'screenshot': {
       const b64 = await 부른다(c, 'GET', `/session/${sid}/screenshot`);
@@ -517,6 +546,24 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       // webdriverio hideKeyboard() 가 부르는 길 그대로 — Ran 줄과 같은 요청이다. 키보드가 없을 때 팜 답은 아직 못 봤다
       await 부른다(c, 'POST', `/session/${sid}/appium/device/hide_keyboard`, {});
       코드 = 'await driver.hideKeyboard()';
+      break;
+    }
+    case 'app': {
+      const 할일 = 인자[0];
+      if (할일 !== 'restart' && 할일 !== 'clear') throw new Error('app 은 restart · clear 다');
+      const 꾸러미 = s.앱?.appPackage ?? String(await 부른다(c, 'GET', `/session/${sid}/appium/device/current_package`));
+      // 띄울 길을 먼저 정한다 — intent 인자를 못 옮기면 앱을 끄거나 비우기 전에 던진다
+      const 띄움 = 띄우기(꾸러미, s.앱);
+      const 실행 = (script: string, arg: Record<string, unknown>): Promise<unknown> => 부른다(c, 'POST', `/session/${sid}/execute/sync`, { script, args: [arg] });
+      if (할일 === 'restart') {
+        await 실행('mobile: terminateApp', { appId: 꾸러미 });
+        코드 = `await driver.terminateApp(${따옴표(꾸러미)})`;
+      } else {
+        await 실행('mobile: clearApp', { appId: 꾸러미 });
+        코드 = `await driver.execute('mobile: clearApp', { appId: ${따옴표(꾸러미)} })`;
+      }
+      await 실행(띄움.script, 띄움.arg);
+      코드 += `\nRan: ${띄움.script === 'mobile: activateApp' ? `await driver.activateApp(${따옴표(꾸러미)})` : `await driver.execute('mobile: startActivity', ${JSON.stringify(띄움.arg)})`}`;
       break;
     }
     case 'back': {

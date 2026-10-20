@@ -164,3 +164,35 @@ export async function 산출물을받는다(c: 연결, sid: string, 폴더: stri
   }
   return { files, errors: (v?.errors ?? []).map((e) => (typeof e === 'string' ? e : JSON.stringify(e))) };
 }
+
+// open 이 띄운 앱 — session 답(없으면 보낸 capabilities)에서 읽는다. 앱을 비운 뒤 같은 intent 인자로 다시 띄우는 데 쓴다
+export interface 띄운앱 {
+  appPackage?: string;
+  appActivity?: string;
+  optionalIntentArguments?: string;
+}
+
+// am start extras 깃발 → UiAutomator2 `mobile: startActivity` extras 꼴 (sn 은 값 없음)
+const extras꼴: Record<string, string> = { '-e': 's', '--es': 's', '--esn': 'sn', '--ez': 'z', '--ei': 'i', '--el': 'l', '--ef': 'f', '--eu': 'u' };
+
+/**
+ * 앱을 어떻게 다시 띄울까 — intent 인자와 activity 를 알면 `mobile: startActivity` 에 같은 extras 를 싣고, 모르면 `mobile: activateApp`.
+ * 데모마켓은 intent 로 받은 서버 주소를 앱 데이터에 두어 clearApp 뒤 activateApp 하면 주소를 잃는다(F6-05 실측).
+ * 앱을 비우기 전에 부른다 — 못 옮기는 인자면 앱을 건드리기 전에 던진다
+ * ponytail: extras 깃발(-e · --es · --esn · --ez · --ei · --el · --ef · --eu)만 옮긴다 — 배열 · 깃발(-f · --activity-*) 인자가 나오면 늘린다
+ */
+export function 띄우기(꾸러미: string, 앱: 띄운앱 = {}): { script: 'mobile: startActivity' | 'mobile: activateApp'; arg: Record<string, unknown> } {
+  if (앱.optionalIntentArguments === undefined || 앱.appActivity === undefined) return { script: 'mobile: activateApp', arg: { appId: 꾸러미 } };
+  const 낱 = [...앱.optionalIntentArguments.matchAll(/'([^']*)'|"([^"]*)"|(\S+)/g)].map((m) => m[1] ?? m[2] ?? m[3]!);
+  const extras: string[][] = [];
+  for (let i = 0; i < 낱.length; ) {
+    const 꼴 = extras꼴[낱[i]!];
+    const 수 = 꼴 === 'sn' ? 2 : 3;
+    if (꼴 === undefined || i + 수 > 낱.length) {
+      throw new Error(`optionalIntentArguments 의 「${낱.slice(i).join(' ')}」 를 mobile: startActivity extras 로 못 옮긴다 — -e · --es · --esn · --ez · --ei · --el · --ef · --eu 만`);
+    }
+    extras.push([꼴, ...낱.slice(i + 1, i + 수)]);
+    i += 수;
+  }
+  return { script: 'mobile: startActivity', arg: { intent: `${꾸러미}/${앱.appActivity}`, extras } };
+}
