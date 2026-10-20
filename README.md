@@ -61,6 +61,15 @@ npx appium-cli apis --file .appium-cli/artifacts/<id>/logcat.txt
 
 팜이 아직 만드는 중(`ready:false`)이면 15초까지 기다린다.
 
+남이 연 session(kit 케이스 디버깅)에는 `attach` 로 붙는다. session 을 새로 열지 않고 지금 화면만 찍는다. `close` 는 그 session 을 닫지 않고 CLI 파일만 지운다(`.last` 도 안 남긴다).
+
+```bash
+npx appium-cli -s=kit attach <sessionId>       # session kit 붙음 (<id>) — 그 뒤 snapshot · tap · fill …
+npx appium-cli -s=kit close                    # session kit 떼어냄 — <id> 는 열어 둔다
+```
+
+붙은 session 의 `logs` · `crawl` 은 `--force` 가 있어야 한다. Appium 은 logcat 줄을 session 마다 한 번만 주니 여기서 읽으면 케이스 쪽에서 그 줄이 사라진다(crawl 은 앱도 다시 띄운다).
+
 앱 구조를 스스로 훑는다 — 지금 화면부터 눌러 가며 화면 키(`app:<activity>/<화면 이름표>`) · 화면 연결을 모은다.
 
 ```bash

@@ -463,6 +463,50 @@ describe('logcat', () => {
   });
 });
 
+describe('attach', () => {
+  it('POST /session 없이 남의 session 화면을 찍고 붙음 표시를 남긴다', async () => {
+    const out = await run(['-s=kit', 'attach', 'kit-7'], env);
+
+    expect(out).toMatch(/^session kit 붙음 \(kit-7\)\n- Snapshot: \.appium-cli\/screen-\d+\.txt$/);
+    expect(부른길()).toEqual(['GET /session/kit-7/source']);
+    expect(JSON.parse(readFileSync('.appium-cli/kit.json', 'utf8'))).toMatchObject({ sessionId: 'kit-7', 붙음: true });
+  });
+
+  it('같은 이름 session 이 있으면 거절하고 Appium 을 안 부른다', async () => {
+    await expect(run(['-s=probe', 'attach', 'kit-7'], env)).rejects.toThrow('session probe 이 이미 열려 있다');
+    expect(부른길()).toEqual([]);
+  });
+
+  it('끝난 session 이면 까닭을 내고 파일을 안 남긴다', async () => {
+    fetchMock.mockResolvedValueOnce(답({ error: 'invalid session id', message: 'gone' }, 404));
+
+    await expect(run(['-s=kit', 'attach', 'kit-7'], env)).rejects.toThrow('session kit-7 에 못 붙었다 — Appium 이 HTTP 404 로 답했다: gone — 이미 끝난 session 이다');
+    expect(existsSync('.appium-cli/kit.json')).toBe(false);
+  });
+
+  it('close 는 남의 session 을 DELETE 하지 않고 파일만 지운다 (.last 도 안 적는다)', async () => {
+    await run(['-s=kit', 'attach', 'kit-7'], env);
+    fetchMock.mockClear();
+
+    expect(await run(['-s=kit', 'close'], env)).toBe('session kit 떼어냄 — kit-7 는 열어 둔다(남의 session)');
+    expect(부른길()).toEqual([]);
+    expect(existsSync('.appium-cli/kit.json')).toBe(false);
+    expect(existsSync('.appium-cli/kit.last')).toBe(false);
+  });
+
+  it('logs · crawl 은 --force 없이 거절한다 — logcat 을 가로채지 않게', async () => {
+    await run(['-s=kit', 'attach', 'kit-7'], env);
+    fetchMock.mockClear();
+
+    await expect(run(['-s=kit', 'logs'], env)).rejects.toThrow('--force');
+    await expect(run(['-s=kit', 'crawl'], env)).rejects.toThrow('앱도 다시 띄운다');
+    expect(부른길()).toEqual([]);
+    fetchMock.mockResolvedValueOnce(답([]));
+    expect(await run(['-s=kit', 'logs', '--force'], env)).toBe('쌓인 줄 0개를 버렸다 — 다음 logs 부터 새 줄만 낸다');
+    expect(부른길()).toEqual(['POST /session/kit-7/se/log']);
+  });
+});
+
 describe('팜 산출물', () => {
   const 영상 = Buffer.from([0x00, 0xff, 0x1a, 0x45, 0xdf, 0xa3, 0x0d, 0x0a]);
   const 목록 = (sid: string, ready = true, files = [

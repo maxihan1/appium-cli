@@ -29,12 +29,16 @@ interface 세션 {
   height: number;
   // 첫 logs 가 쌓인 줄을 버렸는지 — 그 뒤로는 Appium 이 새 줄만 준다
   logcat읽음?: boolean;
+  // attach 로 남의 session(kit 케이스)에 붙었다 — close 가 그 session 을 닫지 않는다
+  붙음?: boolean;
 }
 
 export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
 
   open [--app <apk|URL>] [--udid <id>] [--filter <조건>] [--cap <키=값>]   앱을 띄우고 첫 화면을 찍는다
                                      --cap 은 capabilities 에 더한다 (여러 번 · 값이 JSON 이면 JSON · 기본값을 덮는다)
+  attach <sessionId>                 남이 연 session(kit 케이스)에 붙어 지금 화면을 찍는다 — close 는 그 session 을 안 닫는다
+                                     붙은 session 의 logs · crawl 은 --force 가 있어야 한다 (logcat 새 줄을 가로채 케이스 쪽에서 사라진다)
   snapshot [--raw]                   화면을 파일로 떨군다 (--raw 면 글을 그대로)
   find <글자> | --regex <식>           마지막 화면에서 줄을 찾는다
   tap <ref|선택자>                     누른다 (click 도 같다). 선택자 '~desc' · 'id=…' 는 지금 화면에서 찾는다
@@ -227,6 +231,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       login: { type: 'string' },
       role: { type: 'string' },
       submit: { type: 'boolean' },
+      force: { type: 'boolean' },
     },
   });
   const [명령, ...인자] = positionals;
@@ -296,9 +301,28 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
     return 줄.length === 0 ? `session ${sid} 산출물이 없다` : 줄.join('\n');
   }
 
-  if (명령 === 'open') {
+  if (명령 === 'open' || 명령 === 'attach') {
     const 있음 = await readFile(파일).then(() => true, () => false);
     if (있음) throw new Error(`session ${이름} 이 이미 열려 있다 — close 부터 한다`);
+  }
+
+  // POST /session 없이 파일만 만든다. 화면을 먼저 찍어 살아 있는지 보고, 죽었으면 파일을 안 남긴다
+  if (명령 === 'attach') {
+    const sid = 인자[0];
+    if (sid === undefined) throw new Error('attach 에 sessionId 가 필요하다');
+    if (!/^[\w-]+$/.test(sid)) throw new Error(`session 번호는 글자 · 숫자 · _ · - 만 쓴다: ${sid}`);
+    const s: 세션 = { sessionId: sid, snapshot: null, refs: {}, width: 0, height: 0, 붙음: true };
+    let 찍음: string;
+    try {
+      찍음 = await 찍는다(c, s, false);
+    } catch (e) {
+      throw new Error(`session ${sid} 에 못 붙었다 — ${e instanceof Error ? e.message.replace(/ — session 이 끝났다.*$/, ' — 이미 끝난 session 이다') : String(e)}`);
+    }
+    await 적는다(파일, s);
+    return `session ${이름} 붙음 (${sid})\n${찍음}`;
+  }
+
+  if (명령 === 'open') {
     const app = values.app ?? env.PLATFORM_APP;
     if (!app) throw new Error('앱을 띄우려면 --app 이나 PLATFORM_APP 이 필요하다');
     const 더 = 캡읽기(values.cap ?? []);
@@ -315,6 +339,10 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
 
   const s = await 읽는다(파일);
   const sid = s.sessionId;
+  // Appium 은 logcat 을 session 마다 한 번만 준다 — 여기서 읽으면 케이스(kit · apis --session-id)가 그 줄을 못 받는다
+  if (s.붙음 === true && (명령 === 'logs' || 명령 === 'crawl') && values.force !== true) {
+    throw new Error(`붙은 session 에서 ${명령} 를 하면 logcat 새 줄을 가로채 케이스 쪽에서 사라진다${명령 === 'crawl' ? ' (앱도 다시 띄운다)' : ''} — 그래도 하려면 --force`);
+  }
 
   switch (명령) {
     case 'snapshot': {
@@ -412,6 +440,11 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       return `- Screenshot: ${그림}`;
     }
     case 'close': {
+      // 남의 session 은 닫지 않는다. .last 도 안 적는다 — artifacts 기본값이 아직 도는 남의 session 을 가리키면 안 된다
+      if (s.붙음 === true) {
+        await rm(파일, { force: true });
+        return `session ${이름} 떼어냄 — ${sid} 는 열어 둔다(남의 session)`;
+      }
       // 이미 끊긴 session 이면 DELETE 가 실패한다. 그래도 파일은 지워야 다시 open 할 수 있다
       try {
         await 부른다(c, 'DELETE', `/session/${sid}`);
