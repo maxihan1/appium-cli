@@ -1,6 +1,6 @@
 {
   "name": "appium-cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Token-efficient Appium CLI for coding agents — snapshot refs, tap/fill, webdriverio locator output",
   "type": "module",
   "license": "Apache-2.0",
