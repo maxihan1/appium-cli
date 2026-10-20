@@ -6,7 +6,7 @@
 ## 설치
 
 ```bash
-npm i -D github:maxihan1/appium-cli#v0.2.0   # private 저장소 — git 이 GitHub 에 로그인돼 있어야 한다
+npm i -D github:maxihan1/appium-cli#v0.3.0   # private 저장소 — git 이 GitHub 에 로그인돼 있어야 한다
 npx appium-cli help
 ```
 
