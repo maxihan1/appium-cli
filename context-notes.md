@@ -51,3 +51,12 @@
 - `apis --session-id` 는 쌓인 줄도 버리지 않는다(케이스 전체가 필요하다). `at` 은 줄 머리의 logcat 시각 글(`10-20 10:07:55.318`) — 연도가 없다. 팜 `logcat.txt` 가 정말 줄마다 이 꼴인지는 미실측(가짜 파일로만 시험).
 - `--api-pattern` 은 모임이 둘 아니면 Appium 을 부르기 전에 던진다 — 읽은 줄은 다시 안 오니까. `--api-pattern` 만 줘도 `--api` 로 본다.
 - `apiLines(lines, pattern?)` 는 `src/logcat.ts` 에 있다(F5-06 이 내보낸다). 실기기 확인은 안 했다 — 폰을 잡아야 해서.
+
+## 2026-10-20 crawl 뼈대 (CLI-F5-02)
+- 결과 `.appium-cli/crawl.json` = `{ app, screens: [{key, name, structFp, path}], links: [{from, to, via: "버튼 「이름」"}], presses, restarts, stopped }`. F5-04 가 test_platform 꼴 파일로 바꾼다. `--max` 에 닿아 멈추면 남기지 않은 화면으로 가는 link 가 하나 남을 수 있다.
+- 화면 키 = `app:<activity>/<본문 컨테이너>` — 누르지 못하는 요소 중 desc 가 있는 가장 큰 것 → 앱 resource-id(`android:` 뺌)가 있는 가장 큰 것 → 없으면 구조 지문. name 은 그 안 첫 TextView 글자.
+- 후보 = 누를 수 있고 이름(desc → id → 글자)이 있는 요소, 같은 이름은 앞 것만. 하나뿐인 선택자면 선택자로, 아니면 가운데 좌표.
+- 누른 뒤 앱 · 키 · structFp 중 하나라도 바뀌면 back. 다음 누르기 전에 목표 화면이 아니면 terminateApp · activateApp 뒤 path(후보 이름 차례)를 다시 누른다 — 크롤은 **앱 첫 화면에서 시작**해야 재시작이 같은 곳으로 온다.
+- 안 누를 것 hook 은 `src/crawl.ts` `누를까()` — 탐색과 경로 다시 누르기 둘 다 `후보들` 을 거친다. F5-03 전에는 위험 버튼도 누른다(README · SKILL 에 경고).
+- 확인 못 한 것(F5-05 실기기): MDA 컨테이너가 clickable=false 인지 · 글자를 자식 TextView 에만 가진 버튼(이름이 비어 후보에서 빠짐) · fragment 앱의 같은 nav_host id(키가 뭉칠 수 있음, `ponytail:` 주석).
+- 전체 테스트가 한 번 exit 137 로 죽었다(PC 종료 직후). 다시 돌리니 44개 통과 — 일시적이었다.
