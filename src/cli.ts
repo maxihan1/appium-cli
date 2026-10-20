@@ -1,7 +1,8 @@
 // 앱용 playwright-cli. 명령 하나를 Appium 요청으로 바꾸고, session 상태는 .appium-cli/<이름>.json 에 둔다
 
-import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { lstat, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { dirname, join, parse, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import { logcat을읽는다, 가라앉기, 산출물을받는다, 연결주소, 부른다, 요소를찾는다, 좌표를누른다, 화면을기다린다, type 연결 } from './appium.js';
@@ -53,6 +54,7 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
   crawl [--max 50] [--minutes 10] [--exclude <식>] [--out <폴더>] [--keep <저장본>] [--login <스크립트> [--role <역할>]]
                                      지금 화면부터 눌러 가며 화면 파일 · list · index · links · apis · summary.json 을
                                      --out(기본 .appium-cli/crawl)에 (--max 는 100 장까지). --keep 이면 저장본과 같음 · 바뀜 · 새 화면
+                                     시작 때 --out 의 지난 결과(로그아웃/ · 로그인/ · 결과 json)만 지운다 (뿌리 · 홈 · 작업 폴더나 그 위는 거절)
                                      위험 글자(삭제 · 결제 …) · --exclude 에 맞는 이름은 안 누른다 (--exclude 는 여러 번)
                                      --login 이면 로그아웃 판 뒤 앱 데이터를 지우고 스크립트로 로그인해 로그인:<역할>(기본 일반 회원) 판을 돈다
                                      로그아웃은 로그인 판에서 다시 로그인할 수 있을 때만 누른다 (다시 로그인은 세 번까지)
@@ -119,6 +121,24 @@ function 캡읽기(쌍들: string[]): Record<string, unknown> {
       }
     }),
   );
+}
+
+/**
+ * crawl 이 지난 실행에 쓴 것(상태 폴더 · 결과 json)만 지운다 — 남은 `NNN.yml` 이 이번 화면과 섞이지 않게. 폴더 안 다른 파일은 둔다.
+ * 파일 시스템 뿌리 · 홈 · 작업 폴더나 그 위 폴더는 거절한다(test_platform 크롤러와 같은 뜻 — 기본 .appium-cli/crawl 은 작업 폴더 아래라 받는다).
+ * 상태 폴더가 symlink 면 따라가지 않고 거절한다. 거절은 지우기 전에 다 본다
+ */
+async function 지난결과를지운다(출력: string): Promise<void> {
+  // ponytail: realpath 는 안 본다 — /var · /private/var 처럼 이름만 다른 같은 곳은 못 가린다(지우는 것이 크롤 산출물뿐이라 둔다)
+  const 곳 = resolve(출력);
+  const 여기 = process.cwd();
+  if (곳 === parse(곳).root || 곳 === resolve(homedir()) || 여기 === 곳 || 여기.startsWith(곳 + sep)) {
+    throw new Error(`--out 이 뿌리 · 홈 · 작업 폴더나 그 위 폴더다 — 그 아래 폴더를 준다: ${출력}`);
+  }
+  for (const 상태폴더 of ['로그아웃', '로그인']) {
+    if (await lstat(join(곳, 상태폴더)).then((x) => x.isSymbolicLink(), () => false)) throw new Error(`--out 의 ${상태폴더} 폴더가 symlink 다 — 따라가 지우지 않는다: ${join(출력, 상태폴더)}`);
+  }
+  for (const 이름 of ['로그아웃', '로그인', 'index.json', 'list.json', 'links.json', 'apis.json', 'summary.json']) await rm(join(곳, 이름), { recursive: true, force: true });
 }
 
 async function 읽는다(파일: string): Promise<세션> {
@@ -339,6 +359,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
           for (const 줄 of 줄들) await run([`-s=${이름}`, ...줄, ...연결인자], env);
         },
       };
+      await 지난결과를지운다(출력);
       const 시작 = Date.now();
       const r = await crawl(c, sid, { 장, 분 }, 뺄, 꼴, 로그인);
       const { 파일들, 저장본, 목록수 } = 결과파일들(r, 저장, new Date().toISOString().slice(0, 10));

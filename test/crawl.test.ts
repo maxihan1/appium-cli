@@ -1,8 +1,8 @@
 // crawl 이 화면 셋 그래프를 도는지(새 화면 · 연결 · back · 재시작 + 경로 다시 누르기 · 다른 앱 · 상한) · 안 누를 것 · 확인 창과 화면 키 규칙을 본다
 
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -206,6 +206,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 const 읽기 = <T>(이름: string): T => JSON.parse(readFileSync(join('.appium-cli/crawl', 이름), 'utf8')) as T;
@@ -408,6 +409,64 @@ describe('crawl 결과 파일', () => {
     await expect(run(['-s=c', 'crawl'], env)).rejects.toThrow(/^크롤이 도중에 멈췄다 — Appium 이 HTTP 404 로 답했다: gone.*\.appium-cli\/crawl\/list\.json 에 남겼다$/);
     expect(읽기('summary.json')).toEqual({ 멈춘까닭: null, 상태들: [], 예외: true });
     expect(읽기<목록줄[]>('list.json').map((x) => x.틀)).toEqual([A, B]);
+  });
+});
+
+describe('crawl --out 정리', () => {
+  // 크롤이 쓰는 것 몇 개 + 남의 파일 — 거절이면 하나도 안 지워져야 한다
+  const 심는다 = (곳: string): void => {
+    mkdirSync(join(곳, '로그아웃'), { recursive: true });
+    writeFileSync(join(곳, '로그아웃/099.yml'), '# 지난 화면');
+    writeFileSync(join(곳, 'list.json'), '[]');
+    writeFileSync(join(곳, 'note.txt'), '내 파일');
+  };
+  const 남았다 = (곳: string): boolean[] => ['로그아웃/099.yml', 'list.json', 'note.txt'].map((x) => existsSync(join(곳, x)));
+
+  it('시작할 때 지난 상태 폴더 · 결과 json 만 지우고 폴더의 다른 파일은 둔다', async () => {
+    심는다('.appium-cli/crawl');
+    mkdirSync('.appium-cli/crawl/로그인');
+    writeFileSync('.appium-cli/crawl/로그인/050.yml', '# 지난 로그인 화면');
+    writeFileSync('.appium-cli/crawl/apis.json', '"old"');
+
+    await run(['-s=c', 'crawl'], env);
+
+    expect(남았다('.appium-cli/crawl')).toEqual([false, true, true]);
+    expect(existsSync('.appium-cli/crawl/로그인')).toBe(false);
+    expect(readFileSync('.appium-cli/crawl/note.txt', 'utf8')).toBe('내 파일');
+    expect(읽기<unknown[]>('list.json')).toHaveLength(3);
+    expect(읽기<unknown[]>('apis.json')).toHaveLength(3);
+  });
+
+  it('뿌리 · 홈 · 작업 폴더 · 그 위 폴더는 아무것도 안 지우고 Appium 도 안 부르고 거절한다', async () => {
+    const 집 = mkdtempSync(join(tmpdir(), 'appium-cli-home-'));
+    vi.stubEnv('HOME', 집);
+    심는다(집);
+    심는다('.');
+    // 위 폴더를 보려고 한 칸 내려가 session 파일을 옮겨 둔다 — '..' 은 이 테스트 폴더다
+    mkdirSync('w');
+    cpSync('.appium-cli', 'w/.appium-cli', { recursive: true });
+    process.chdir('w');
+    fetchMock.mockClear();
+
+    for (const out of ['/', 집, '.', resolve('.'), '..', resolve('../..')]) {
+      await expect(run(['-s=c', 'crawl', '--out', out], env)).rejects.toThrow(`--out 이 뿌리 · 홈 · 작업 폴더나 그 위 폴더다 — 그 아래 폴더를 준다: ${out}`);
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(남았다(집)).toEqual([true, true, true]);
+    expect(남았다('..')).toEqual([true, true, true]);
+  });
+
+  it('상태 폴더가 symlink 면 따라가지 않고 아무것도 안 지우고 거절한다', async () => {
+    mkdirSync('elsewhere');
+    writeFileSync('elsewhere/001.yml', '남의 것');
+    mkdirSync('out');
+    writeFileSync('out/list.json', '[]');
+    symlinkSync(resolve('elsewhere'), 'out/로그인');
+    fetchMock.mockClear();
+
+    await expect(run(['-s=c', 'crawl', '--out', 'out'], env)).rejects.toThrow('--out 의 로그인 폴더가 symlink 다 — 따라가 지우지 않는다: out/로그인');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect([existsSync('elsewhere/001.yml'), existsSync('out/로그인'), existsSync('out/list.json')]).toEqual([true, true, true]);
   });
 });
 
