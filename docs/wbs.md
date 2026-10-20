@@ -60,7 +60,8 @@ API 는 logcat 으로 본다 — QA 는 debug 빌드라 네트워크 로그가 �
   - 근거 commit 0523323 · 2026-10-20
 - [x] `CLI-F6-03` `attrs <ref>` — 그 요소의 원래 XML 속성 전부(hint · password · focusable · checkable · long-clickable · scrollable · selected · bounds …). 웹 작성 AI 가 `eval` 로 입력칸 최대 글자 · 필수 · 형식을 읽어 경계값 케이스를 만드는 자리(test_platform `tpx-cases/references/4-selector.md`). snapshot 은 줄인 글이라 ref 표에 원래 속성을 함께 둔다. 비밀번호 칸 text 는 여기서도 싣지 않는다. 테스트: 속성 · 비밀번호 가림
   - 근거 commit 9a01bb8 · 2026-10-20
-- [ ] `CLI-F6-04` crawl `--out` 정리 (결함) — 시작할 때 상태 폴더(`로그아웃/` · `로그인/`)와 결과 json 을 지운다. 지금은 이전 실행의 `NNN.yml` 이 남아 test_platform 이 폴더를 훑으면 지난 화면이 섞인다. `--out` 이 작업 트리 · 홈처럼 위험한 곳이면 거절(test_platform 크롤러와 같다). 테스트: 남은 파일이 지워지는지 · 위험 경로 거절
+- [x] `CLI-F6-04` crawl `--out` 정리 (결함) — 시작할 때 상태 폴더(`로그아웃/` · `로그인/`)와 결과 json 을 지운다. 지금은 이전 실행의 `NNN.yml` 이 남아 test_platform 이 폴더를 훑으면 지난 화면이 섞인다. `--out` 이 작업 트리 · 홈처럼 위험한 곳이면 거절(test_platform 크롤러와 같다). 테스트: 남은 파일이 지워지는지 · 위험 경로 거절
+  - 근거 commit 1f55510 · 2026-10-20
 - [ ] `CLI-F6-05` 실기기 확인 2 — 데모마켓 debug 앱(`~/Projects/demo-market/android`, 요소마다 resource-id · content-desc 같은 이름, `optionalIntentArguments` 로 서버 주소)으로: 팜 `logcat.txt` 꼴과 `apis --file` · 좌표 fill(element/active) · 실기기 `screen` · `attrs` 로 hint · 최대 글자가 나오는지 · `artifacts` 영상 · crawl 화면별 API 배정. API 배정은 데모마켓 `Api.kt` `call()` 에 `Log.d("OkHttp", "--> $method ${base + path}")` 한 줄이 있어야 한다 (사용자: 데모마켓 수정 허락 — 없으면 API 만 빼고 닫는다). 폰은 hold → … → close · release → IDLE 확인
 - [ ] `CLI-F6-06` crawl 스크롤 — 화면 후보를 다 누른 뒤 스크롤 가능한 요소가 있으면 위로 밀어 새 후보를 모은다(같은 후보가 다시 보이면 끝 · 화면당 상한). 경로 다시 누르기에 스크롤도 기록한다. 데모마켓 상품 목록 「더 불러오기」
 - [ ] `CLI-F6-07` crawl 재시작 줄이기 — 실측 누름의 약 70% 가 재시작(F5-05). back 이 엉뚱한 화면으로 가면 그 화면에서 목표까지 아는 가장 짧은 경로를 먼저 시도하고, 안 될 때만 재시작. 같은 시간에 장수 · 깊이가 느는지 MDA 로 잰다
