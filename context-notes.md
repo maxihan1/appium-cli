@@ -44,3 +44,10 @@
 - 앱 PID 로 거르지 못한다 — 팜 Appium 에 `--allow-insecure=uiautomator2:adb_shell` 이 없다. API 줄 꼴(OkHttp `--> GET …`)로만 거른다.
 - **지도 · DB (2026-10-20 실제 DB 조회).** 지도 표는 `screen_record`(PK service_id · env · state · url) · `screen_link`(from_url · to_url · via) · `screen_found` · `case_screen`(tc_id · file · screen_url) · `req_case` · `service_api` · `service_api_use`(케이스 줄 또는 화면 줄, 화면 줄은 screen_record 로 FK). url 은 전부 TEXT 이고 지금 값은 경로(`/board`). 상태는 `로그아웃` · `로그인:<역할>` CHECK. 플랫폼 · 엔진 칸은 없다.
   → 앱 화면 키 `app:<activity>/<화면 이름표>` 를 url 칸에 넣으면 표를 안 바꾸고 화면 · 화면 연결 · 화면 ↔ API 가 들어간다. 케이스 ↔ 화면 · 케이스 ↔ API 는 test_platform 작업(앱 화면 파일 · 실행 중 logcat)이 있어야 잇는다.
+
+## 2026-10-20 logs · apis (CLI-F5-01)
+- **첫 `logs` 는 쌓인 줄을 버리고 session 파일에 `logcat읽음` 을 적는다.** 그 뒤 새 줄만 주는 것은 Appium 이 session 마다 읽은 자리를 기억해서다(CLI 는 자리를 안 든다). 그래서 open 뒤 · 볼 동작 전에 `logs` 를 한 번 불러 기준을 잡아야 한다 — 크롤러(F5-02)도 시작할 때 한 번 버리고, 누름마다 `logs` 로 그 사이 API 를 모은다. 시각으로 자르지 않은 까닭: Appium 항목 `timestamp` 는 팜 PC 가 줄을 받은 시각이라(쌓인 줄도 session 시작 시각) CLI 시계와 견줄 수 없다.
+- 같은 session 의 se/log 를 다른 누군가(kit · `apis --session-id`)가 부르면 그 줄은 이쪽에 다시 오지 않는다 — 한 session 에 읽는 쪽은 하나.
+- `apis --session-id` 는 쌓인 줄도 버리지 않는다(케이스 전체가 필요하다). `at` 은 줄 머리의 logcat 시각 글(`10-20 10:07:55.318`) — 연도가 없다. 팜 `logcat.txt` 가 정말 줄마다 이 꼴인지는 미실측(가짜 파일로만 시험).
+- `--api-pattern` 은 모임이 둘 아니면 Appium 을 부르기 전에 던진다 — 읽은 줄은 다시 안 오니까. `--api-pattern` 만 줘도 `--api` 로 본다.
+- `apiLines(lines, pattern?)` 는 `src/logcat.ts` 에 있다(F5-06 이 내보낸다). 실기기 확인은 안 했다 — 폰을 잡아야 해서.
