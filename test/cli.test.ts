@@ -6,7 +6,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { run } from '../src/cli.js';
+import { run, 가라앉기 } from '../src/cli.js';
 
 import { 화면XML } from './fixture.js';
 
@@ -32,6 +32,7 @@ function 가짜(): void {
 const 부른길 = (): string[] => (fetchMock.mock.calls as [string, RequestInit][]).map(([u, i]) => `${i.method} ${u.replace('http://farm:4723/wd/hub', '')}`);
 
 beforeEach(async () => {
+  Object.assign(가라앉기, { 최대_ms: 0, 간격_ms: 0 });
   process.chdir(mkdtempSync(join(tmpdir(), 'appium-cli-')));
   fetchMock.mockReset();
   가짜();
@@ -110,6 +111,22 @@ describe('tap', () => {
   });
 });
 
+describe('액션 뒤 화면', () => {
+  it('화면이 늦게 바뀌면 바뀌고 가라앉을 때까지 다시 읽는다', async () => {
+    Object.assign(가라앉기, { 최대_ms: 1000, 간격_ms: 1 });
+    const 새화면 = 화면XML.replace('로그인 > 시작', '상품 목록');
+    const 차례 = [화면XML, 화면XML, 새화면, 새화면];
+    const 기본 = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) => (url.endsWith('/source') ? 답(차례.shift() ?? 새화면) : 기본(url, init)));
+
+    const out = await run(['-s=probe', 'tap', 'e3'], env);
+
+    expect(부른길().filter((p) => p.endsWith('/source'))).toHaveLength(4);
+    const 파일 = out.split('- Snapshot: ')[1]!;
+    expect(await import('node:fs/promises').then((f) => f.readFile(파일, 'utf8'))).toContain('desc="상품 목록"');
+  });
+});
+
 describe('그 밖의 명령', () => {
   it('fill 은 요소에 값을 보내고 setValue 코드를 준다', async () => {
     const out = await run(['-s=probe', 'fill', 'e4', "a'b"], env);
@@ -127,6 +144,10 @@ describe('그 밖의 명령', () => {
     expect(await run(['-s=probe', 'find', '--regex', '로그인|Jerry'], env)).toBe(
       'TextView text="Tom & Jerry > 1" [10,20][30,40] [ref=e2]\nButton desc="로그인 > 시작" 클릭 꺼짐 [10,50][30,70] [ref=e3]',
     );
+  });
+
+  it('find --regex 는 /식/i 꼴로 플래그를 받는다', async () => {
+    expect(await run(['-s=probe', 'find', '--regex', '/jerry/i'], env)).toBe('TextView text="Tom & Jerry > 1" [10,20][30,40] [ref=e2]');
   });
 
   it('swipe 는 화면 크기로 swipeGesture 를 부른다', async () => {

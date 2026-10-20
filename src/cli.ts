@@ -61,10 +61,34 @@ async function 읽는다(파일: string): Promise<세션> {
 
 const 적는다 = (파일: string, s: 세션): Promise<void> => writeFile(파일, JSON.stringify(s, null, 2));
 
-async function 찍는다(c: 연결, s: 세션, raw: boolean): Promise<string> {
+// 테스트가 줄일 수 있게 묶어 둔다
+export const 가라앉기 = { 최대_ms: 3000, 간격_ms: 300 };
+
+async function 읽어온다(c: 연결, s: 세션): Promise<ReturnType<typeof parseSource>> {
   const xml = await 부른다(c, 'GET', `/session/${s.sessionId}/source`);
   if (typeof xml !== 'string') throw new Error('Appium 이 화면 글을 주지 않았다');
-  const 화면 = parseSource(xml);
+  return parseSource(xml);
+}
+
+/**
+ * 앞 화면 글(앞)을 주면 액션 뒤 화면이 바뀌고 가라앉을 때까지 다시 읽는다.
+ * React Native 앱은 누른 뒤 화면을 늦게 바꾼다 — 실측: 로그인 버튼 0.5초 뒤 snapshot 이 앞 화면이었다(2026-10-20 MDA).
+ * 안 바뀌는 액션(같은 화면 안 누르기 · 비밀번호 입력)은 최대_ms 를 다 기다리고 마지막 화면을 쓴다
+ */
+async function 찍는다(c: 연결, s: 세션, raw: boolean, 앞?: string): Promise<string> {
+  let 화면 = await 읽어온다(c, s);
+  if (앞 !== undefined) {
+    let 바뀜 = 화면.글 !== 앞;
+    const 끝 = Date.now() + 가라앉기.최대_ms;
+    while (Date.now() < 끝) {
+      await new Promise((r) => setTimeout(r, 가라앉기.간격_ms));
+      const 다음 = await 읽어온다(c, s);
+      const 같음 = 다음.글 === 화면.글;
+      화면 = 다음;
+      if (바뀜 && 같음) break;
+      if (다음.글 !== 앞) 바뀜 = true;
+    }
+  }
   const 파일 = join(폴더, `screen-${Date.now()}.txt`);
   await writeFile(파일, 화면.글);
   Object.assign(s, { snapshot: 파일, refs: 화면.refs, width: 화면.width, height: 화면.height });
@@ -179,7 +203,9 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       const 찾을것 = 인자[0];
       if (찾을것 === undefined) throw new Error('find 에 찾을 글자가 필요하다');
       if (s.snapshot === null) throw new Error('찍은 화면이 없다 — snapshot 부터 한다');
-      const 식 = values.regex === true ? new RegExp(찾을것) : null;
+      // playwright-cli 처럼 `/식/i` 로 플래그를 붙인다 — JS 정규식은 `(?i)` 를 모른다
+      const 꼴 = /^\/(.+)\/([a-z]*)$/.exec(찾을것);
+      const 식 = values.regex !== true ? null : 꼴 ? new RegExp(꼴[1]!, 꼴[2]) : new RegExp(찾을것);
       const 줄 = (await readFile(s.snapshot, 'utf8')).split('\n').filter((l) => (식 ? 식.test(l) : l.includes(찾을것)));
       return 줄.length === 0 ? '찾은 줄 없음' : 줄.map((l) => l.trim()).join('\n');
     }
@@ -204,6 +230,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
     }
   }
 
+  const 앞화면 = s.snapshot === null ? undefined : await readFile(s.snapshot, 'utf8').catch(() => undefined);
   let 코드: string;
   switch (명령) {
     case 'tap':
@@ -263,7 +290,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
   }
 
   // playwright-cli 처럼 액션마다 새 화면을 찍는다 — 화면이 바뀌면 이전 ref 는 쓸 수 없다
-  const 찍음 = await 찍는다(c, s, false);
+  const 찍음 = await 찍는다(c, s, false, 앞화면);
   await 적는다(파일, s);
   return `Ran: ${코드}\n${찍음}`;
 }

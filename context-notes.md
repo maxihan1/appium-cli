@@ -21,3 +21,12 @@
 - **토큰 환경값은 `PLATFORM_APPIUM_TOKEN`** (CLI-F2-01). test_platform `APP-F1-10` 이 아직이라 `PLATFORM_APPIUM_URL` 짝으로 이 이름을 정했다 — kit 이 다른 이름을 고르면 CLI 를 맞춘다. 토큰이 있으면 URL 안 계정(Basic)은 버린다.
 - **hold · release · devices** (CLI-F2-02). 잡기 주소는 Appium 주소에서 `/wd/hub` 를 뗀 곳. 잡은 폰 serial 은 `.appium-cli/held` 에 적어 `release` 가 `--udid` 없이 놓게 한다. `close` 는 폰을 놓지 않는다 — 팜은 놓을 때 깐 앱을 지워서, 탐색 중 session 을 다시 열 때마다 앱이 지워지면 안 된다. 실제 팜 `devices` 응답 확인(R3CR10TCVCD IDLE).
 - **`--filter` → `farm:filter`** (CLI-F2-03). `--app` 은 경로든 URL 이든 그대로 넘긴다 — test_platform runner 는 `://` 를 400 으로 막지만(러너 PC 가 아무 apk 나 받지 않게), CLI 는 사람이나 작성 AI 가 직접 쓰는 도구이고 팜은 URL 을 요구한다.
+
+## 2026-10-20 실기기 E2E (CLI-F3-01) — 팜 폰 R3CR10TCVCD · MDA(saucelabs my-demo-app-rn v1.3.0, test_platform SETUP.md §15 의 연습 앱)
+- 흐름: devices → hold 30 → open(앱 설치 포함 11.4초) → tap `~open menu` → tap `~menu item log in` → fill `~Username input field` · `~Password input field` → tap `~Login button` → 로그인 뒤 화면에서 tap `~sort button` → `~nameDesc` → swipe up → back → screenshot → close → release → 폰 IDLE.
+- **newCommandTimeout 300 을 팜이 받는다.** 75초 아무 명령 없이 둔 뒤 snapshot 이 됐다(팜 기본 60초면 끊겼을 것).
+- **액션 뒤 화면이 늦게 바뀐다.** 로그인 버튼 0.5초 뒤 자동 snapshot 이 앞 화면(로그인)이었다 — 그 ref 로 누르면 엉뚱한 요소다. 고침: 화면이 앞과 달라지고 연속 두 번 같을 때까지 300ms 간격으로 다시 읽는다(최대 3초). 고친 뒤 정렬 창이 바로 찍혔다. 안 바뀌는 액션은 3초를 다 쓴다.
+- 액션 하나 약 2초(가라앉기 포함). 화면 파일은 5~7KB(요소 25~70개) — Appium 원본 XML 의 1/10 아래.
+- `find --regex` 에 `(?i)` 를 넣었다가 JS 정규식이 거절했다 → playwright-cli 처럼 `/식/i` 를 받게 했다.
+- 확인 못 한 것: 주소 없는 입력칸의 좌표 fill(element/active) — MDA 입력칸은 모두 desc 가 있었다.
+- 팜 쪽 실측: `/wd/hub/session` · `/api/devices/{serial}/hold` 모두 문서대로였다. W3C `element` · `click` · `value` · `actions` 아닌 `mobile: swipeGesture` · `back` · `screenshot` 도 팜을 거쳐 됐다.
