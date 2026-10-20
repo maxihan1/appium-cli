@@ -60,3 +60,4 @@ API 는 logcat 으로 본다 — QA 는 debug 빌드라 네트워크 로그가 �
   - 케이스 ↔ API(`service_api_use` 케이스 줄): 웹은 실행 trace 에서 채우는데 android 실행은 trace 가 없다(`traceIngest.ts` android 건너뜀). kit fixture 가 session 을 닫기 전에 `apiLines` 로 읽거나 러너가 닫은 뒤 팜 `logcat.txt` 를 받아 `apis --file` 로 — 시각으로 단계에 나눠 넣는다. logcat 버퍼는 10,000줄 상한(실측)이라 긴 케이스는 `appium:logcatFilterSpecs` 로 네트워크 줄만 받는 것을 권한다(미실측)
   - API 가 지도에 들려면 앱 API 호스트가 그 대상 서버 `base_url` 과 같은 사이트이거나 `project_api_server` 에 있어야 한다
   - 크롤 결과를 화면 기록 통로로 올리는 것은 작성 에이전트 몫
+  - 화면 파일 머리 `# app:…` 받기 — test_platform `기록주소()` 가 `# https?://` 만 받아 앱 화면 파일이 `이번것들` · `받은저장본` 에서 빠진다(CLI-F5-04 에서 확인)
