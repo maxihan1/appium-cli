@@ -6,7 +6,7 @@
 > **체크는 근거가 있을 때만 찍는다.** 다음 줄에 `  - 근거 <commit> · YYYY-MM-DD`. 순번은 재사용하지 않는다.
 > 결정과 까닭은 `context-notes.md`, 계획 원본은 `~/.claude/plans/appium-mcp-test-platform-nifty-pie.md`.
 
-**차례** CLI-F2-01 → F2-02 → F2-03 → F3-01 → F4-01 → F5-01 → F5-02 → F5-03 → F5-04 → F5-05 → F5-06.
+**차례** CLI-F2-01 → F2-02 → F2-03 → F3-01 → F4-01 → F5-01 → F5-02 → F5-03 → F5-04 → F5-06 → F5-05 → F6-01 → F6-02 → F6-03 → F6-04 → F6-05 → (다음) F6-06 ~ F6-10.
 
 ---
 
@@ -52,6 +52,19 @@ API 는 logcat 으로 본다 — QA 는 debug 빌드라 네트워크 로그가 �
 - [x] `CLI-F5-05` 로그인 상태 · 실기기 — 로그아웃 상태를 먼저 돌고, `--login <스크립트>`(appium-cli 명령 묶음)로 로그인해 다시 돈다. 풀리면 앱 데이터 지우기(`mobile: clearApp`) 뒤 다시 로그인 — 세 번까지. 실기기: 팜 폰 + MDA 로 로그아웃 · 로그인 두 상태를 돌아 장수 · 시간 · 링크 수를 `context-notes.md` 에 적는다. API 줄은 debug apk 가 있으면 함께 본다 (사용자: debug apk — 없으면 API 만 빼고 닫는다)
   - 근거 commit ec0e5ed · 2026-10-20 (팜 폰 · MDA — 결과는 context-notes.md)
 
+### ⑥ 추가 기능 — 2026-10-20 재점검(test_platform 이 웹에서 쓰는 playwright-cli 명령 · 남은 미확인 · test_platform 진행판 APP-F1-11~13)
+**무엇** test_platform 에서 앱을 바로 쓰는 데 모자란 것(먼저 F6-01~05)과 크롤 범위 · 편의(다음 F6-06~10).
+- [ ] `CLI-F6-01` `open --cap key=value`(여러 번) — capabilities 에 그대로 싣는다. 값은 JSON 이면 JSON 으로(`appium:optionalIntentArguments='--es server http://…'` · `appium:autoGrantPermissions=true` · `appium:logcatFilterSpecs=["OkHttp:D","*:S"]`). 팜 · 컨테이너는 `adb reverse` 를 못 쓰니 데모마켓 앱 서버 주소는 이 길로만 준다. 테스트: capabilities 몸 · JSON 값
+- [ ] `CLI-F6-02` `artifacts [sessionId] [--out 폴더]` — 팜 `GET /wd/hub/api/sessions/{id}/artifacts` 의 `files[].url`(실측: `logcat.txt` · `video-1.mp4` …, 30일 보관)을 내려받는다. sessionId 가 없으면 이 CLI 가 마지막으로 `close` 한 session(close 때 번호를 남긴다). `ready:false` 면 잠깐 기다린다. 라이브러리 입구 `farmArtifacts()` 로도 낸다 — test_platform `APP-F1-12`(증적 영상 · logcat) 가 쓴다. 받은 `logcat.txt` 는 `apis --file` 에 그대로. 테스트: 가짜 fetch 로 목록 · 내려받기 · 마지막 session
+- [ ] `CLI-F6-03` `attrs <ref>` — 그 요소의 원래 XML 속성 전부(hint · password · focusable · checkable · long-clickable · scrollable · selected · bounds …). 웹 작성 AI 가 `eval` 로 입력칸 최대 글자 · 필수 · 형식을 읽어 경계값 케이스를 만드는 자리(test_platform `tpx-cases/references/4-selector.md`). snapshot 은 줄인 글이라 ref 표에 원래 속성을 함께 둔다. 비밀번호 칸 text 는 여기서도 싣지 않는다. 테스트: 속성 · 비밀번호 가림
+- [ ] `CLI-F6-04` crawl `--out` 정리 (결함) — 시작할 때 상태 폴더(`로그아웃/` · `로그인/`)와 결과 json 을 지운다. 지금은 이전 실행의 `NNN.yml` 이 남아 test_platform 이 폴더를 훑으면 지난 화면이 섞인다. `--out` 이 작업 트리 · 홈처럼 위험한 곳이면 거절(test_platform 크롤러와 같다). 테스트: 남은 파일이 지워지는지 · 위험 경로 거절
+- [ ] `CLI-F6-05` 실기기 확인 2 — 데모마켓 debug 앱(`~/Projects/demo-market/android`, 요소마다 resource-id · content-desc 같은 이름, `optionalIntentArguments` 로 서버 주소)으로: 팜 `logcat.txt` 꼴과 `apis --file` · 좌표 fill(element/active) · 실기기 `screen` · `attrs` 로 hint · 최대 글자가 나오는지 · `artifacts` 영상 · crawl 화면별 API 배정. API 배정은 데모마켓 `Api.kt` `call()` 에 `Log.d("OkHttp", "--> $method ${base + path}")` 한 줄이 있어야 한다 (사용자: 데모마켓 수정 허락 — 없으면 API 만 빼고 닫는다). 폰은 hold → … → close · release → IDLE 확인
+- [ ] `CLI-F6-06` crawl 스크롤 — 화면 후보를 다 누른 뒤 스크롤 가능한 요소가 있으면 위로 밀어 새 후보를 모은다(같은 후보가 다시 보이면 끝 · 화면당 상한). 경로 다시 누르기에 스크롤도 기록한다. 데모마켓 상품 목록 「더 불러오기」
+- [ ] `CLI-F6-07` crawl 재시작 줄이기 — 실측 누름의 약 70% 가 재시작(F5-05). back 이 엉뚱한 화면으로 가면 그 화면에서 목표까지 아는 가장 짧은 경로를 먼저 시도하고, 안 될 때만 재시작. 같은 시간에 장수 · 깊이가 느는지 MDA 로 잰다
+- [ ] `CLI-F6-08` `fill --submit` · `hide-keyboard` — playwright-cli `fill --submit` 처럼 입력 뒤 IME 동작(`mobile: performEditorAction`)을 보낸다. 키보드가 아래 버튼을 가리면 `hide-keyboard`
+- [ ] `CLI-F6-09` `attach <sessionId>` — 남이 연 session(kit 케이스)에 CLI session 파일만 만들어 붙는다. test_platform 이 웹에서 실패한 케이스를 `playwright cli attach` 로 디버깅하는 자리(`tpx-cases/references/6-gates.md`). close 는 그 session 을 닫지 않고 파일만 지운다(남의 session)
+- [ ] `CLI-F6-10` `app restart` · `app clear` · `record start|stop` — crawl 안에만 있는 재시작 · 데이터 지우기를 명령으로. record 는 팜이 아닌 로컬 Appium 용(팜은 F6-02)
+
 ---
 
 ## 지금 안 하는 것
@@ -62,4 +75,5 @@ API 는 logcat 으로 본다 — QA 는 debug 빌드라 네트워크 로그가 �
   - 케이스 ↔ API(`service_api_use` 케이스 줄): 웹은 실행 trace 에서 채우는데 android 실행은 trace 가 없다(`traceIngest.ts` android 건너뜀). kit fixture 가 session 을 닫기 전에 `apiLines` 로 읽거나 러너가 닫은 뒤 팜 `logcat.txt` 를 받아 `apis --file` 로 — 시각으로 단계에 나눠 넣는다. logcat 버퍼는 10,000줄 상한(실측)이라 긴 케이스는 `appium:logcatFilterSpecs` 로 네트워크 줄만 받는 것을 권한다(미실측)
   - API 가 지도에 들려면 앱 API 호스트가 그 대상 서버 `base_url` 과 같은 사이트이거나 `project_api_server` 에 있어야 한다
   - 크롤 결과를 화면 기록 통로로 올리는 것은 작성 에이전트 몫
+  - 진행판 `APP-F1-11` 문구 「appium-mcp 로」 → appium-cli · `APP-F1-13` 토큰 환경값 이름을 CLI `PLATFORM_APPIUM_TOKEN` 과 맞추기
   - 화면 파일 머리 `# app:…` 받기 — test_platform `기록주소()` 가 `# https?://` 만 받아 앱 화면 파일이 `이번것들` · `받은저장본` 에서 빠진다(CLI-F5-04 에서 확인)
