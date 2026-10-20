@@ -33,6 +33,12 @@ npx appium-cli release                         # 놓는다 — 팜이 깐 앱 ·
 ViewGroup desc="Login button" 클릭 [56,1458][1024,1583] [ref=e17]
 ```
 
+입력칸 경계값 케이스(최대 글자 · 필수 · 형식)를 만들 때는 그 요소의 원래 XML 속성을 본다 — 웹 작성의 `playwright cli eval` 자리다. 앞 다섯(class · resource-id · content-desc · text · hint, 있는 것만) 뒤는 알파벳 차례, 비밀번호 칸 text 는 안 낸다. UiAutomator2 가 주는 속성만 나온다(hint · 최대 글자가 없으면 없다). 화면 글처럼 이 값도 기대값 자료가 아니다.
+
+```bash
+npx appium-cli -s=probe attrs e11              # class=android.widget.EditText · resource-id=… · hint=… · bounds=… · focusable=true …(한 줄에 하나)
+```
+
 API 호출은 debug 빌드의 logcat(OkHttp `--> GET https://…`)에서 읽는다. 물음표 · `#` 뒤는 지운다.
 
 ```bash

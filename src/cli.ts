@@ -42,6 +42,7 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
   back                               뒤로
   screenshot [--filename <파일>]       스크린샷
   generate-locator <ref>             webdriverio 선택자
+  attrs <ref>                        그 요소의 원래 XML 속성 (한 줄에 키=값 · 비밀번호 칸 text 는 안 낸다)
   screen                             지금 화면 키 · 이름 (crawl 과 같은 키 — 앱 화면 파일의 화면 주소 값)
   close                              session 을 닫는다 (번호를 남겨 artifacts 가 쓴다)
   list                               열린 session 목록
@@ -367,6 +368,13 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
     case 'generate-locator': {
       const { loc, 겹침 } = 고른다(s, 인자[0]);
       return 선택자글(loc, 겹침) ?? `driver.$(${따옴표(loc!)})`;
+    }
+    case 'attrs': {
+      // 이름 넷 · hint 를 앞에, 나머지는 알파벳 차례 — 줄바꿈은 \n 으로 적어 한 줄에 하나를 지킨다
+      const { el } = 고른다(s, 인자[0]);
+      const 앞 = ['class', 'resource-id', 'content-desc', 'text', 'hint'].filter((k) => k in el.속성);
+      const 키들 = [...앞, ...Object.keys(el.속성).filter((k) => !앞.includes(k)).sort()];
+      return 키들.map((k) => `${k}=${el.속성[k]!.replace(/\n/g, '\\n')}`).join('\n');
     }
     case 'screenshot': {
       const b64 = await 부른다(c, 'GET', `/session/${sid}/screenshot`);

@@ -204,6 +204,44 @@ describe('그 밖의 명령', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('attrs 는 Appium 을 부르지 않고 원래 속성을 한 줄에 하나 — 비밀번호 칸 text 는 안 낸다', async () => {
+    expect((await run(['-s=probe', 'attrs', 'e4'], env)).split('\n')).toEqual([
+      'resource-id=com.shop:id/pw',
+      'content-desc=',
+      'bounds=[10,80][30,90]',
+      'clickable=true',
+      'index=2',
+      'password=true',
+      'scrollable=false',
+    ]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('attrs 는 class · resource-id · content-desc · text · hint 다음 알파벳 차례, 줄바꿈은 \\n', async () => {
+    const 입력칸 =
+      '<hierarchy width="1080" height="2400"><android.widget.EditText index="0" text="첫&#10;둘" hint="이메일" focusable="true" ' +
+      'class="android.widget.EditText" bounds="[0,0][10,10]" content-desc="" resource-id="com.shop:id/email" /></hierarchy>';
+    const 기본 = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) => (url.endsWith('/source') ? 답(입력칸) : 기본(url, init)));
+    await run(['-s=probe', 'snapshot'], env);
+
+    expect((await run(['-s=probe', 'attrs', 'e1'], env)).split('\n')).toEqual([
+      'class=android.widget.EditText',
+      'resource-id=com.shop:id/email',
+      'content-desc=',
+      'text=첫\\n둘',
+      'hint=이메일',
+      'bounds=[0,0][10,10]',
+      'focusable=true',
+      'index=0',
+    ]);
+  });
+
+  it('attrs 도 마지막 화면에 없는 ref 는 generate-locator 와 같이 던진다', async () => {
+    await expect(run(['-s=probe', 'attrs', 'e99'], env)).rejects.toThrow('ref e99 가 마지막 화면에 없다 — snapshot 을 다시 찍고 거기 ref 를 쓴다');
+    await expect(run(['-s=probe', 'attrs'], env)).rejects.toThrow('ref (없음) 가 마지막 화면에 없다');
+  });
+
   it('find 는 마지막 화면에서 줄을 찾는다', async () => {
     expect(await run(['-s=probe', 'find', '--regex', '로그인|Jerry'], env)).toBe(
       'TextView text="Tom & Jerry > 1" [10,20][30,40] [ref=e2]\nButton desc="로그인 > 시작" 클릭 꺼짐 [10,50][30,70] [ref=e3]',

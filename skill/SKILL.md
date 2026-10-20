@@ -50,6 +50,8 @@ npx appium-cli apis --session-id <id>             # 남이 연 session(kit 케�
 
 **앱 구조 훑기** — `npx appium-cli -s=probe crawl --max 50 --minutes 10` 이 화면마다 파일 · `list.json` · `links.json` · `apis.json` · `summary.json` 을 test_platform 크롤러 꼴로 `.appium-cli/crawl/`(`--out <폴더>`)에 남긴다. 이전 저장본이 있으면 `--keep <저장본 json>` — 화면마다 같음 · 바뀜 · 새 화면을 `list.json` 과 요약 줄에 낸다. 앱 첫 화면에서 시작한다(돌아오지 못하면 앱을 다시 띄워 경로를 다시 누른다). 위험 글자(삭제 · 결제 · 담기 …) 버튼은 안 누르고(로그아웃은 로그인 판에서 다시 로그인할 수 있을 때만), 탈퇴 흐름 화면에서는 아무것도 안 누르고, 확인 창은 경고 · 탈퇴 · 입력칸이면 back 한다. 더 뺄 버튼은 `--exclude '<식>'`(여러 번, `/식/i` 꼴). 로그인 뒤 화면도 보려면 `--login <스크립트>`(`--role <역할>`, 기본 일반 회원) — 로그아웃 판 뒤 앱 데이터를 지우고 스크립트로 로그인해 한 번 더 돈다(장수 · 시간은 판마다 나눈다). 스크립트는 `appium-cli -s=<이름>` 뒤에 쓰는 명령을 한 줄에 하나(`tap` · `fill` · `back` · `swipe` 만, ref 대신 선택자, 띄어쓰기는 따옴표 — `fill '~Username input field' bob@example.com`)이고 끝나면 앱 첫 화면이어야 한다. 계정 값은 스크립트 파일에만 두고 대화 · 커밋에 싣지 않는다.
 
+**입력칸 경계값 케이스 — `attrs <ref>`.** 그 요소의 원래 XML 속성을 한 줄에 `키=값` 하나로 낸다(class · resource-id · content-desc · text · hint 다음 알파벳 차례, 비밀번호 칸 text 는 안 낸다). 웹의 `playwright cli eval` 로 최대 글자 · 필수 · 형식을 읽던 자리다. UiAutomator2 가 주는 속성만 나오니 없는 제약은 지어내지 않는다. 이 값도 `verify` 기대값으로 옮기지 않는다(화면 글과 같다).
+
 **화면 키 — 앱 화면 파일(page object)에 적는다.** `npx appium-cli -s=probe screen` 이 지금 화면 키 · 이름을 한 줄로 낸다(`app:.Main/login screen · Login` — 이름이 없으면 키만). 키(` · ` 앞)를 그 화면 파일의 화면 주소 값으로 적는다 — 케이스 ↔ 화면이 이 값으로 이어진다. crawl 이 남기는 키와 같다. 코드에서는 `import { screenKey, parseSource, apiLines } from 'appium-cli'` 로 같은 규칙을 부른다(`screenKey(source xml, current_activity)`).
 
 화면 한 줄이 요소 하나다.

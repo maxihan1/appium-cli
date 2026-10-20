@@ -13,6 +13,8 @@ export interface 요소 {
   꺼짐: boolean;
   // XML 깊이 — 문서 차례와 함께 자손을 가린다(컨테이너 밑인지 · 이름 없는 버튼의 자식 글자)
   깊이: number;
+  // 원래 XML 속성(풀어 쓴 값) — attrs 가 낸다. 비밀번호 칸은 text 를 뺀다
+  속성: Record<string, string>;
 }
 
 export interface 화면 {
@@ -80,9 +82,10 @@ export function parseSource(xml: string): 화면 {
     const 누름 = a.clickable === 'true' || a['long-clickable'] === 'true';
     const 남김 = 글 !== '' || 이름표 !== '' || id !== '' || 누름 || a.scrollable === 'true';
     if (남김) {
+      const { text: _, ...가린 } = a;
       const ref = `e${Object.keys(refs).length + 1}`;
       const cls = 이름!.split('.').pop()!;
-      refs[ref] = { cls, text: 글, desc: 이름표, id, bounds: a.bounds ?? '', 누름, 비밀번호: a.password === 'true', 꺼짐: a.enabled === 'false', 깊이: 조상.length };
+      refs[ref] = { cls, text: 글, desc: 이름표, id, bounds: a.bounds ?? '', 누름, 비밀번호: a.password === 'true', 꺼짐: a.enabled === 'false', 깊이: 조상.length, 속성: a.password === 'true' ? 가린 : a };
       const 칸 = [cls];
       if (글 !== '') 칸.push(`text=${JSON.stringify(글)}`);
       if (이름표 !== '') 칸.push(`desc=${JSON.stringify(이름표)}`);

@@ -25,6 +25,13 @@ describe('parseSource', () => {
     expect(화면.refs.e4!.text).toBe('');
   });
 
+  it('ref 표에 원래 속성을 풀어 두되 비밀번호 칸 text 는 뺀다', () => {
+    expect(화면.refs.e3!.속성).toMatchObject({ 'content-desc': '로그인 > 시작', enabled: 'false', clickable: 'true' });
+    expect(화면.refs.e4!.속성).not.toHaveProperty('text');
+    expect(화면.refs.e4!.속성.password).toBe('true');
+    expect(JSON.stringify(화면.refs)).not.toContain('••••');
+  });
+
   it('화면 크기를 돌려준다', () => {
     expect([화면.width, 화면.height]).toEqual([1080, 2400]);
   });
