@@ -42,3 +42,5 @@
 - **API 는 logcat.** 실측: 팜을 거쳐 Appium `se/log {type:"logcat"}` 가 된다(첫 호출 10,000줄, 그 뒤 새 줄만). MDA(release)는 `api calls` 화면에서 404 호출이 났는데(화면에 Not found) 앱 줄 7개가 다 터치였다 — API 0줄.
   사용자: QA 는 debug 빌드를 쓰고 운영에서만 CD 로 로그를 뺀다 → logcat 길로 간다. 프록시(mitmproxy)는 인증서 신뢰 설정 · 폰 프록시가 무거워 안 한다.
 - 앱 PID 로 거르지 못한다 — 팜 Appium 에 `--allow-insecure=uiautomator2:adb_shell` 이 없다. API 줄 꼴(OkHttp `--> GET …`)로만 거른다.
+- **지도 · DB (2026-10-20 실제 DB 조회).** 지도 표는 `screen_record`(PK service_id · env · state · url) · `screen_link`(from_url · to_url · via) · `screen_found` · `case_screen`(tc_id · file · screen_url) · `req_case` · `service_api` · `service_api_use`(케이스 줄 또는 화면 줄, 화면 줄은 screen_record 로 FK). url 은 전부 TEXT 이고 지금 값은 경로(`/board`). 상태는 `로그아웃` · `로그인:<역할>` CHECK. 플랫폼 · 엔진 칸은 없다.
+  → 앱 화면 키 `app:<activity>/<화면 이름표>` 를 url 칸에 넣으면 표를 안 바꾸고 화면 · 화면 연결 · 화면 ↔ API 가 들어간다. 케이스 ↔ 화면 · 케이스 ↔ API 는 test_platform 작업(앱 화면 파일 · 실행 중 logcat)이 있어야 잇는다.
