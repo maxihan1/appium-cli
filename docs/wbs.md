@@ -5,8 +5,7 @@
 > **체크는 근거가 있을 때만 찍는다.** 다음 줄에 `  - 근거 <commit 또는 PR> · YYYY-MM-DD`. 순번은 재사용하지 않는다.
 > 결정과 까닭은 `context-notes.md`, 계획 원본은 `~/.claude/plans/appium-mcp-test-platform-nifty-pie.md`.
 
-**차례** CLI-F2-01 → F2-02 → F2-03 → F3-01 → F4-01 → TP-1 → TP-2 → TP-3 → TP-4 → TP-5.
-TP-1(명세)은 CLI 작업과 따로 먼저 해도 된다.
+**차례** CLI-F2-01 → F2-02 → F2-03 → F3-01 → F4-01 → TP-1 → TP-2.
 
 ---
 
@@ -35,15 +34,12 @@ TP-1(명세)은 CLI 작업과 따로 먼저 해도 된다.
 
 ## TP — test_platform 연동 (`~/Projects/test_platform`)
 
-> test_platform 진행판 `APP-F1-11` 을 세션 크기로 쪼갠 것이다. 시작할 때 그쪽 `docs/wbs.md` 에 새 번호로 옮겨 적고 그쪽 규칙(`/tpx` · 병합된 PR 로만 체크)을 따른다. 여기 체크는 그 PR 이 병합된 뒤 찍는다.
+> test_platform 진행판 `APP-F1-11` 에 해당한다. 시작할 때 그쪽 `docs/wbs.md` 에 새 번호로 옮겨 적고 그쪽 규칙(`/tpx` · 병합된 PR 로만 체크)을 따른다. 여기 체크는 그 PR 이 병합된 뒤 찍는다.
 
 ### ⑤ 작성 AI 가 앱을 눌러 가며 읽는다
-**무엇** 지금 작성 AI 는 앱 첫 화면 한 장만 본다. appium-cli 로 로그인 뒤 화면까지 보고 `~desc` · `id=` 를 고른다.
-- [ ] `TP-1` 명세 먼저 — 작성 §3.6 「앱 화면」에 「로그인 뒤 다른 화면 — appium-cli」 절(도구를 appium-mcp 에서 CLI 로 바꾼 까닭: 토큰 · 컨테이너에 MCP 서버 설정이 없다 · 웹 playwright-cli 와 같은 루프). 정할 것 셋을 사용자와 정한다 — ① 폰은 누가 잡나(에이전트 스크립트가 AI 띄우기 전에 잡고 끝나면 놓기 / AI 가 CLI 로) ② 인증 없음 팜에서 작성 탐색과 정식 실행이 같은 잡힌 폰에 겹칠 때 ③ 첫 화면 파일(`app-screen.txt`)은 남기나. 계약 변경 블록(author 컨테이너 환경값 · 새 의존성)을 모아 승인
-- [ ] `TP-2` 의존성 · 지침 — `package.json` devDependency(`github:…#v0.1.0`) · `.claude/skills/appium-cli/` 에 SKILL.md 원본 그대로(playwright-cli 처럼) · `.gitignore` 에 `.appium-cli/`. 검사: `npm ci` 뒤 `npx appium-cli help` · `npm run typecheck` · `npm test`
-- [ ] `TP-3` 작성 컨테이너 연결 — `docker-compose` author 에 `PLATFORM_APPIUM_URL=http://host.docker.internal:4723/wd/hub` · 토큰 환경값. 컨테이너 안에서 `npx appium-cli devices` → `hold` → `open` → `close` → `release` 실측
-- [ ] `TP-4` 에이전트 · 자식 지침 — `scripts/authoring-agent.ts` 에 TP-1 ①의 결정대로 폰 잡기 · 놓기와 끝난 뒤 남은 session 닫기(`.appium-cli/*.json`) · 프롬프트 `--- 앱 화면 ---` 절에 「appium-cli 를 쓸 수 있다」 · `.claude/skills/tpx-author/references/app.md` §1 · §2 개정(「첫 화면에 없음」 보류 → CLI 로 가서 읽기, 못 가면 그때 보류). 테스트: 에이전트가 끝에 session 을 닫는지
-- [ ] `TP-5` 끝까지 한 번 — MDA 서비스에 로그인 뒤 화면을 요구하는 작성 요청 하나 → PR 이 나오고 「⚠️ 폰이 없어 돌려 보지 않은 앱 케이스」 경고가 붙는지 → 병합 뒤 실행 화면에서 폰 러너로 초록. test_platform 진행판 `APP-F1-11` 체크
+**무엇** 지금 작성 AI 는 앱 첫 화면 한 장만 본다. 설치 + 지침만 넣으면 AI 가 appium-cli 로 로그인 뒤 화면까지 보고 `~desc` · `id=` 를 고른다. 폰 잡기 · 놓기도 AI 가 CLI 로 한다 — 에이전트 코드는 안 바꾼다.
+- [ ] `TP-1` 연동 PR 하나 — ① `npm i -D github:<계정>/appium-cli#v0.1.0` ② `.claude/skills/appium-cli/` 에 SKILL.md 원본 그대로 ③ `.claude/skills/tpx-author/references/app.md` §2 「첫 화면에 없음 → 보류」를 「appium-cli 로 가서 읽기, 못 가면 그때 보류」로 ④ `docker-compose` author 에 `PLATFORM_APPIUM_URL=http://host.docker.internal:4723/wd/hub` ⑤ `.gitignore` 에 `.appium-cli/` ⑥ 명세 작성 §3.6 「앱 화면」 · 진행판 `APP-F1-11` 문구(appium-mcp → appium-cli, 까닭: 토큰 · 컨테이너에 MCP 설정 불필요 · 웹 playwright-cli 와 같은 루프). 검사: 컨테이너 안에서 `npx appium-cli devices` · `npm run typecheck` · `npm test`
+- [ ] `TP-2` 끝까지 한 번 — MDA 서비스에 로그인 뒤 화면을 요구하는 작성 요청 하나 → 자식 AI 가 hold → 탐색 → release 하고 PR 이 나오는지 → 병합 뒤 실행 화면에서 폰 러너로 초록. 진행판 `APP-F1-11` 체크. 주의: 인증 없는 팜에서는 작성 탐색과 정식 실행이 같은 잡힌 폰에 겹칠 수 있다 — 확인 중엔 실행을 돌리지 않는다
 
 ---
 
