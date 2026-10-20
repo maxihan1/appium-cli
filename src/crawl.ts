@@ -145,8 +145,10 @@ export async function crawl(c: 연결, sid: string, 상한: { 장: number; 분: 
     const 판 = 확인창(Object.values(지금.화면.refs), 탈퇴로);
     if (판 === null) return;
     if (셈) r.dialogs[판.결과] = (r.dialogs[판.결과] ?? 0) + 1;
-    if (판.버튼 === undefined) await 부른다(c, 'POST', `/session/${sid}/back`, {});
-    else await 누른다(c, sid, 지금.화면, 판.버튼);
+    // 버튼이 그사이 사라져 못 누르면 back 으로 닫는다 — 창 하나 때문에 크롤 전체가 멈추지 않게
+    const 버튼 = 판.버튼;
+    const 눌렀다 = 버튼 !== undefined && (await 누른다(c, sid, 지금.화면, 버튼).then(() => true, () => false));
+    if (!눌렀다) await 부른다(c, 'POST', `/session/${sid}/back`, {});
     지금 = await 본다(c, sid, 지금.화면.글);
   };
 
@@ -159,7 +161,7 @@ export async function crawl(c: 연결, sid: string, 상한: { 장: number; 분: 
     for (const 이름 of 목표.path) {
       const x = 후보들(지금.화면, 뺄).find((h) => h.이름 === 이름);
       if (x === undefined) return false;
-      await 누른다(c, sid, 지금.화면, x.el);
+      if (!(await 누른다(c, sid, 지금.화면, x.el).then(() => true, () => false))) return false;
       지금 = await 본다(c, sid, 지금.화면.글);
       await 창을닫는다(false, false);
     }

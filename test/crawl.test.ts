@@ -224,6 +224,22 @@ describe('crawl', () => {
     ]);
   });
 
+  it('확인 창 버튼이 그사이 사라져 못 누르면 back 으로 닫고 크롤을 이어 간다', async () => {
+    화면들 = 위험앱;
+    const 기본처리 = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) =>
+      url.endsWith('/element') && String(init.body).includes('android:id/button1')
+        ? new Response(JSON.stringify({ value: { error: 'no such element', message: 'gone' } }), { status: 404 })
+        : 기본처리(url, init),
+    );
+
+    await run(['-s=c', 'crawl'], env);
+
+    expect(눌림).not.toContain('D1 android:id/button1');
+    expect(결과().dialogs.누름).toBe(1);
+    expect(결과().screens.length).toBeGreaterThan(1);
+  });
+
   it('--max 는 1 ~ 100 장만 받는다', async () => {
     fetchMock.mockClear();
     await expect(run(['-s=c', 'crawl', '--max', '101'], env)).rejects.toThrow('--max 는 1 ~ 100 장이다');
