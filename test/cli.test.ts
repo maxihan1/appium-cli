@@ -1,6 +1,6 @@
 // CLI 명령이 Appium 에 보내는 요청 순서 · 출력 · session 파일을 본다. 네트워크는 fetch 가짜로 막는다
 
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -250,6 +250,15 @@ describe('그 밖의 명령', () => {
 
   it('find --regex 에 g 를 붙여도 줄을 건너뛰지 않는다', async () => {
     expect((await run(['-s=probe', 'find', '--regex', '/^ /g'], env)).split('\n')).toHaveLength(3);
+  });
+
+  it('attrs — 속성 없이 찍힌 옛 session 파일이면 snapshot 을 다시 찍으라고 한다', async () => {
+    const 파일 = '.appium-cli/probe.json';
+    const 세션 = JSON.parse(readFileSync(파일, 'utf8')) as { refs: Record<string, { 속성?: unknown }> };
+    for (const el of Object.values(세션.refs)) delete el.속성;
+    writeFileSync(파일, JSON.stringify(세션));
+
+    await expect(run(['-s=probe', 'attrs', 'e3'], env)).rejects.toThrow('snapshot 을 다시 찍고');
   });
 
   it('find --regex 는 /식/i 꼴로 플래그를 받는다', async () => {

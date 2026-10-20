@@ -372,6 +372,8 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
     case 'attrs': {
       // 이름 넷 · hint 를 앞에, 나머지는 알파벳 차례 — 줄바꿈은 \n 으로 적어 한 줄에 하나를 지킨다
       const { el } = 고른다(s, 인자[0]);
+      // v0.2.0 까지의 session 파일은 속성을 안 남겼다
+      if (el.속성 === undefined) throw new Error('이 화면은 속성 없이 찍혔다 — snapshot 을 다시 찍고 거기 ref 를 쓴다');
       const 앞 = ['class', 'resource-id', 'content-desc', 'text', 'hint'].filter((k) => k in el.속성);
       const 키들 = [...앞, ...Object.keys(el.속성).filter((k) => !앞.includes(k)).sort()];
       return 키들.map((k) => `${k}=${el.속성[k]!.replace(/\n/g, '\\n')}`).join('\n');
