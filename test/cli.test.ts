@@ -146,6 +146,10 @@ describe('그 밖의 명령', () => {
     );
   });
 
+  it('find --regex 에 g 를 붙여도 줄을 건너뛰지 않는다', async () => {
+    expect((await run(['-s=probe', 'find', '--regex', '/^ /g'], env)).split('\n')).toHaveLength(3);
+  });
+
   it('find --regex 는 /식/i 꼴로 플래그를 받는다', async () => {
     expect(await run(['-s=probe', 'find', '--regex', '/jerry/i'], env)).toBe('TextView text="Tom & Jerry > 1" [10,20][30,40] [ref=e2]');
   });

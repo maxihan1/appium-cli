@@ -60,7 +60,8 @@ const 따옴표 = (s: string): string => `'${s.replace(/\\/g, '\\\\').replace(/'
 // playwright-cli 처럼 `/식/i` 로 플래그를 붙인다 — JS 정규식은 `(?i)` 를 모른다
 function 정규식(s: string): RegExp {
   const 꼴 = /^\/(.+)\/([a-z]*)$/.exec(s);
-  return 꼴 ? new RegExp(꼴[1]!, 꼴[2]) : new RegExp(s);
+  // g · y 는 test() 가 lastIndex 를 남겨 다음 줄을 건너뛴다 — 줄마다 거르는 데는 뺀다
+  return 꼴 ? new RegExp(꼴[1]!, 꼴[2]!.replace(/[gy]/g, '')) : new RegExp(s);
 }
 
 function API꼴(s: string | undefined): RegExp | undefined {
