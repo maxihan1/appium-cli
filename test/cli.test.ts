@@ -17,6 +17,10 @@ const 답 = (value: unknown, status = 200): Response => new Response(JSON.string
 // 길마다 답을 정해 두고, 부른 순서를 `METHOD 경로` 로 모은다
 function 가짜(): void {
   fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
+    if (url.startsWith('http://farm:4723/api/devices?')) return 답({ devices: [{ serial: 'R3', model: 'SM-G996N', osVersion: '15', state: 'IDLE', detail: 'ready' }] });
+    if (url === 'http://farm:4723/api/devices') return 답({ devices: [{ serial: 'R3', model: 'SM-G996N', osVersion: '15', state: 'OCCUPIED', detail: 'manual' }] });
+    if (url.endsWith('/hold') && init.method === 'POST') return new Response(JSON.stringify({ held: { until: 0, now: 0 } }));
+    if (url.endsWith('/hold')) return new Response(JSON.stringify({ released: true }));
     const path = url.replace('http://farm:4723/wd/hub', '');
     if (path === '/session') return 답({ sessionId: 's-1', capabilities: {} });
     if (path.endsWith('/source')) return 답(화면XML);
@@ -133,5 +137,45 @@ describe('그 밖의 명령', () => {
     fetchMock.mockResolvedValueOnce(답({ error: 'invalid session id', message: 'gone' }, 404));
 
     await expect(run(['-s=probe', 'back'], env)).rejects.toThrow('HTTP 404 로 답했다: gone — session 이 끝났다. open 부터 다시 한다');
+  });
+});
+
+describe('디바이스 팜', () => {
+  const 주소들 = (): string[] => (fetchMock.mock.calls as [string, RequestInit][]).map(([u, i]) => `${i.method} ${u}`);
+
+  it('devices 는 /wd/hub 를 뗀 팜 주소에서 폰과 상태를 보인다', async () => {
+    expect(await run(['devices'], env)).toBe('R3 SM-G996N Android 15 OCCUPIED(manual)');
+    expect(주소들()).toEqual(['GET http://farm:4723/api/devices']);
+  });
+
+  it('hold 는 udid 가 없으면 빈 폰 하나를 골라 30분 잡고, release 는 그 폰을 놓는다', async () => {
+    expect(await run(['hold'], env)).toMatch(/^폰 R3 잡음 — \d\d:\d\d 까지/);
+    expect(await run(['release'], env)).toBe('폰 R3 놓음 — 팜이 깐 앱 · 앱 데이터를 정리한다');
+
+    expect(주소들()).toEqual([
+      'GET http://farm:4723/api/devices?status=idle',
+      'POST http://farm:4723/api/devices/R3/hold',
+      'DELETE http://farm:4723/api/devices/R3/hold',
+    ]);
+    expect(JSON.parse((fetchMock.mock.calls[1] as [string, RequestInit])[1].body as string)).toEqual({ minutes: 30 });
+    expect(existsSync('.appium-cli/held')).toBe(false);
+  });
+
+  it('udid 를 주면 목록을 보지 않고 그 폰을 잡는다', async () => {
+    await run(['hold', '--udid', 'ZZ', '--minutes', '60'], env);
+
+    expect(주소들()).toEqual(['POST http://farm:4723/api/devices/ZZ/hold']);
+  });
+
+  it('팜이 거절하면 이유를 그대로 낸다', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ refused: '남이 잡은 폰' }), { status: 409 }));
+
+    await expect(run(['hold', '--udid', 'ZZ'], env)).rejects.toThrow('HTTP 409 로 답했다: 남이 잡은 폰');
+    expect(existsSync('.appium-cli/held')).toBe(false);
+  });
+
+  it('잡는 시간은 30 · 60 · 120 분만 받는다', async () => {
+    await expect(run(['hold', '--minutes', '45'], env)).rejects.toThrow('30 · 60 · 120');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

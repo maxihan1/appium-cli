@@ -31,14 +31,16 @@ export async function 부른다(c: 연결, method: string, path: string, body?: 
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     signal: AbortSignal.timeout(제한_ms),
   });
-  const json = (await res.json().catch(() => null)) as { value?: unknown } | null;
+  const json: unknown = await res.json().catch(() => null);
+  // W3C 는 { value } 로 싸서 주고, 팜의 잡기 주소는 { held } · { refused } 를 그대로 준다
+  const 몸 = json !== null && typeof json === 'object' && 'value' in json ? json.value : json;
   if (!res.ok) {
-    const v = json?.value as { error?: string; message?: string } | undefined;
-    const 까닭 = v?.message ?? '';
-    const 힌트 = v?.error === 'invalid session id' ? ' — session 이 끝났다. open 부터 다시 한다' : '';
+    const v = (몸 ?? {}) as { error?: string; message?: string; refused?: string };
+    const 까닭 = v.message ?? v.refused ?? '';
+    const 힌트 = v.error === 'invalid session id' ? ' — session 이 끝났다. open 부터 다시 한다' : '';
     throw new Error(`Appium 이 HTTP ${res.status} 로 답했다${까닭 === '' ? '' : `: ${까닭}`}${힌트}`);
   }
-  return json?.value;
+  return 몸;
 }
 
 const ELEMENT = 'element-6066-11e4-a5ab-c8d2b5b44a87';

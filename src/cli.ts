@@ -9,6 +9,14 @@ import { capabilities, center, locatorFor, parseSource, w3c, type 요소 } from 
 
 const 폴더 = '.appium-cli';
 
+interface 폰 {
+  serial: string;
+  model?: string;
+  osVersion?: string;
+  state: string;
+  detail?: string;
+}
+
 interface 세션 {
   sessionId: string;
   snapshot: string | null;
@@ -30,6 +38,11 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
   generate-locator <ref>             webdriverio 선택자
   close                              session 을 닫는다
   list                               열린 session 목록
+
+디바이스 팜 (session 을 열기 전에 폰을 잡는다)
+  devices                            팜의 폰과 상태
+  hold [--udid <serial>] [--minutes 30|60|120]   폰을 잡는다 (udid 가 없으면 빈 폰 하나)
+  release [--udid <serial>]          폰을 놓는다 — 팜이 깐 앱 · 앱 데이터를 정리한다
 
 연결: --url 또는 PLATFORM_APPIUM_URL (없으면 http://127.0.0.1:4723)
 토큰: --token 또는 PLATFORM_APPIUM_TOKEN (팜이 인증을 켰을 때 — Bearer)
@@ -85,6 +98,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       raw: { type: 'boolean' },
       regex: { type: 'boolean' },
       filename: { type: 'string' },
+      minutes: { type: 'string' },
     },
   });
   const [명령, ...인자] = positionals;
@@ -102,6 +116,37 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
   }
 
   const c = 연결주소(values.url ?? env.PLATFORM_APPIUM_URL ?? 'http://127.0.0.1:4723', values.token ?? env.PLATFORM_APPIUM_TOKEN);
+
+  // 잡기 주소는 Appium 주소에서 /wd/hub 를 뗀 곳에 있다 (Devicefarm docs/guides/test-platform.md §4)
+  const 팜 = { ...c, base: c.base.replace(/\/wd\/hub$/, '') };
+  const 잡은폰 = join(폴더, 'held');
+  if (명령 === 'devices') {
+    const v = (await 부른다(팜, 'GET', '/api/devices')) as { devices?: 폰[] } | null;
+    const 폰들 = v?.devices ?? [];
+    if (폰들.length === 0) return '팜에 꽂힌 폰이 없다';
+    return 폰들.map((p) => `${p.serial} ${p.model ?? '?'} Android ${p.osVersion ?? '?'} ${p.state}(${p.detail ?? ''})`).join('\n');
+  }
+  if (명령 === 'hold') {
+    const 분 = Number(values.minutes ?? 30);
+    if (![30, 60, 120].includes(분)) throw new Error('--minutes 는 30 · 60 · 120 중 하나다');
+    let serial = values.udid ?? env.PLATFORM_DEVICE_UDID;
+    if (!serial) {
+      const v = (await 부른다(팜, 'GET', '/api/devices?status=idle')) as { devices?: 폰[] } | null;
+      serial = v?.devices?.[0]?.serial;
+      if (!serial) throw new Error('잡을 수 있는 빈 폰이 없다 — devices 로 상태를 본다');
+    }
+    const v = (await 부른다(팜, 'POST', `/api/devices/${encodeURIComponent(serial)}/hold`, { minutes: 분 })) as { held?: { until?: number } } | null;
+    await writeFile(잡은폰, serial);
+    const 끝 = v?.held?.until === undefined ? '' : ` — ${new Date(v.held.until).toTimeString().slice(0, 5)} 까지`;
+    return `폰 ${serial} 잡음${끝}. 다 쓰면 close 뒤 release`;
+  }
+  if (명령 === 'release') {
+    const serial = values.udid ?? env.PLATFORM_DEVICE_UDID ?? (await readFile(잡은폰, 'utf8').catch(() => '')).trim();
+    if (!serial) throw new Error('놓을 폰을 모른다 — --udid 로 준다');
+    await 부른다(팜, 'DELETE', `/api/devices/${encodeURIComponent(serial)}/hold`);
+    await rm(잡은폰, { force: true });
+    return `폰 ${serial} 놓음 — 팜이 깐 앱 · 앱 데이터를 정리한다`;
+  }
 
   if (명령 === 'open') {
     const 있음 = await readFile(파일).then(() => true, () => false);

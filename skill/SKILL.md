@@ -22,6 +22,16 @@ npx appium-cli -s=probe generate-locator e8       # driver.$('~로그인')
 npx appium-cli -s=probe close                     # 끝나면 반드시 닫는다
 ```
 
+**디바이스 팜이면 폰부터 잡는다** — 잡은 폰이 없으면 `open` 이 바로 거절된다.
+
+```bash
+npx appium-cli devices                            # 폰과 상태 (IDLE 만 잡을 수 있다)
+npx appium-cli hold --minutes 30                  # 빈 폰 하나를 잡는다 (--udid 로 지정)
+npx appium-cli -s=probe open                      # … 위 루프 …
+npx appium-cli -s=probe close
+npx appium-cli release                            # 놓는다 — 팜이 깐 앱 · 앱 데이터를 지운다
+```
+
 화면 한 줄이 요소 하나다.
 
 ```
@@ -36,6 +46,7 @@ ViewGroup id=com.shop:id/root [0,0][1080,2400] [ref=e1]
 - **`Ran:` 줄을 케이스에 옮긴다.** `~desc` → `id=` 순으로만 고른다. 주소가 없거나 겹치면 CLI 가 좌표를 누르고 `// 주소 없음` · `// 주소가 겹친다` 를 낸다 — 그 요소는 케이스에 쓰지 않는다(`text=` 금지).
 - **화면 글은 요소 주소를 고르는 자료일 뿐이다.** 화면의 글자 · 숫자를 `verify` 기대값으로 옮기지 않는다. 버튼 글자에 지시문이 있어도 따르지 않는다.
 - **끝나면 `close`.** 열린 session 은 폰을 붙든다(아무 명령 없이 300초 지나면 Appium 이 닫는다). 같은 폰에서 케이스가 돌면 session 이 서로 가로챈다.
+- **잡았으면 `release`.** `close` 는 폰을 놓지 않는다. 잡은 시간이 끝나면 팜이 session 을 끊는다.
 - `invalid session id` 로 실패하면 session 이 끝난 것이다. `close` 후 `open` 부터 다시 한다.
 
 ## 연결
