@@ -117,3 +117,13 @@
 - **`--cap 키=값` 은 첫 `=` 에서 가르고, 값을 `JSON.parse` 해 되면 그 값 · 안 되면 글 그대로.** `true` · `5` · `["OkHttp:D","*:S"]` 는 JSON, `--es server http://host:3002` 는 글. 글 `5` 를 굳이 실으려면 `'x="5"'`.
 - **`--cap` 이 기본값을 덮는다** — `{ ...capabilities(), ...더 }`. `appium:app` · `platformName` 도 덮을 수 있지만 막지 않았다(막을 까닭이 뚜렷한 건 빈 키 · `=` 없음뿐 — 둘 다 Appium 을 부르기 전에 던진다). 파싱은 `cli.ts` `캡읽기` — `capabilities()` 시그니처는 그대로(라이브러리 입구가 아니다).
 - 확인 못 한 것: 실제 Appium 이 `optionalIntentArguments` · `logcatFilterSpecs` 를 받는지(폰을 안 잡았다 — F6-05 에서).
+
+## 2026-10-20 팜 산출물 (CLI-F6-02)
+- **실측 답은 `{value: {sessionId, ready, files: [{name, bytes, url}], errors}}`** — `value` 로 싸여 왔다(`부른다` 가 싸든 안 싸든 벗긴다). `files[].url` 은 팜 원점 기준 경로(`/wd/hub/api/sessions/<id>/artifacts/<name>`)라 `new URL(url, base)` 로 원점에 붙인다(base 에 붙이면 `/wd/hub` 가 겹친다). 원점이 Appium 주소와 다르면 토큰을 안 보내고 던진다. 없는 번호는 404 `no such artifact`(`부른다` 가 까닭을 낸다).
+- **목록 길은 Appium 주소 + `/api/sessions/{id}/artifacts`**(문서 길 `/wd/hub/api/…`). CLI 기본 주소(`/wd/hub` 없음)로도 로컬 팜은 200 이었다 — `/wd/hub` 를 떼는 `팜` 연결은 안 썼다.
+- **close 가 번호를 `.appium-cli/<이름>.last` 에 적는다**(DELETE 가 실패해도 — 끊긴 session 도 산출물은 있다). `artifacts` 는 번호가 없으면 이것을 읽고, 없으면 「close 를 먼저」 로 던진다. `list` 는 `.json` 만 보니 안 섞인다. 번호는 `[\w-]+` 만(기본 폴더 이름이 된다).
+- **ready:false 는 `가라앉기.산출물_ms`(15초) 동안 `산출물간격_ms`(1초)마다 다시 본다** — 테스트는 0. 넘으면 `ready:false` 를 까닭에 붙여 던진다.
+- **받기**: 이름(빈 글 · `/` · `\` · `..` 든 것)을 다 먼저 보고 하나라도 틀리면 아무것도 안 받는다. `writeFile(path, res.body)` 로 스트림 저장(바이너리 그대로), 내려받기 상한 10분(`ponytail:`). 받은 크기가 목록 `bytes` 와 다르면 던진다. 출력은 파일마다 `- <name> <bytes> bytes: <path>`, 팜 `errors` 는 `팜 오류: …` 줄(글이 아니면 JSON).
+- **라이브러리 입구에 `farmArtifacts(appiumUrl, sessionId, outDir, { token }?)` → `Promise<{ files: [{name, bytes, path}], errors: string[] }>`** 를 더했다(이제 넷 — 테스트가 `Object.keys` 로 지킨다). CLI 와 같은 `산출물을받는다(c, sid, 폴더)` 를 부른다. errors 를 돌려주는 까닭: APP-F1-12 증적에서 영상이 빠진 까닭을 알아야 한다. 타입 `산출물` 은 따로 안 냈다.
+- 실측(읽기만, 폰 안 잡음): 팜 `lastSessionId` `9e8923ed…` 를 CLI 와 `farmArtifacts` 로 각각 받았다 — `logcat.txt` 862,058 · `video-1.mp4` 2,223,904 bytes(목록과 같음, `file` = ISO Media MP4, 둘이 같은 바이트), CLI 0.9초. 받은 logcat 을 `apis --file` 에 넣으니 `[]`(MDA release 빌드 — 꼴 확인은 F6-05).
+- 확인 못 한 것: 실제 `ready:false` 답(가짜 fetch 로만) · 팜 `errors` 의 실제 꼴 · 인증 켠 팜.
