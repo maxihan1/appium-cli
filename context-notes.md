@@ -85,3 +85,10 @@
 - 요약 줄: `크롤: 로그아웃 N장 · 연결 · API · 누름 · 재시작 · 확인 창 · 저장본 … · 멈춘 까닭 · 초 · <out>/list.json`.
 - test_platform 쪽에서 볼 것(이 저장소 밖): `기록주소()` 가 `# https?://` 만 받아 `# app:…` 머리의 화면 파일은 `이번것들` · `받은저장본` 에서 빠진다 — 앱 크롤 결과를 올리려면 그쪽이 `app:` 도 받아야 한다. `--out` 폴더는 이전 실행의 남은 `NNN.yml` 을 지우지 않는다(list.json 이 기준).
 - 확인 못 한 것: 실기기 logcat API 배정(debug apk — F5-05), 화면 파일 크기(구조 상한 40,000자는 안 옮겼다 — 앱 화면 5~7KB 실측).
+
+## 2026-10-20 라이브러리 · screen (CLI-F5-06)
+- **입구는 `src/index.ts` 하나 — `screenKey` · `parseSource` · `apiLines` 셋만 낸다**(테스트가 `Object.keys` 로 지킨다). 공개 이름은 영어(다른 저장소가 부른다), 안쪽 이름은 그대로. `package.json` `exports["."]` = `{types: ./dist/index.d.ts, default: ./dist/index.js}`, bin 은 그대로. `tsconfig.build.json` `declaration: true` — d.ts 는 모든 파일에 나오고 index.d.ts 가 `./crawl.js` 의 `화면정보` 를 가리킨다(타입은 따로 안 냈다 — `ReturnType<typeof screenKey>` 로 쓴다). `exports` 를 두면 `appium-cli/dist/…` 깊은 import 는 막힌다.
+- `screenKey(xml, activity)` 는 `화면을가린다(parseSource(xml), activity)` 한 줄 — 규칙을 옮기지 않았다. activity 는 Appium `current_activity` 값 그대로(`.Main` 꼴). 기본 API 꼴 상수(`기본API꼴`)는 안 냈다 — `apiLines` 둘째 인자를 비우면 그것이다.
+- **`screen` 은 crawl 의 `본다()`(이제 export)를 그대로 부른다** — source · current_activity · current_package 를 읽고 키는 crawl 이 남기는 값과 같다. 출력은 `<키> · <이름>`, 이름이 없으면 키만. 화면 파일 · ref 표는 안 바꾼다(읽기만). `--raw`/JSON 은 안 붙였다.
+- 꾸러미 확인: `npm pack` tgz 를 빈 폴더에 깔아 `import('appium-cli')` → `[apiLines, parseSource, screenKey]`, `tsc --moduleResolution nodenext --skipLibCheck false` 로 타입도 통과. GitHub 설치(`github:…#tag`)는 새 태그가 있어야 받는다 — 태그는 주인이 정한다(이번엔 안 만들었다).
+- 확인 못 한 것: 실기기 `screen`(폰을 안 잡았다) · test_platform 쪽 실제 import(그쪽 작업).
