@@ -15,6 +15,7 @@ allowed-tools: Bash(npx:*) Bash(appium-cli:*)
 npx appium-cli -s=probe open                      # 앱을 띄우고 첫 화면을 찍는다 (경로만 출력)
 npx appium-cli -s=probe find --regex "로그인|가입"   # 마지막 화면에서 줄 찾기
 npx appium-cli -s=probe tap e3                    # 누른다 → Ran: 코드 한 줄 + 새 화면 경로
+npx appium-cli -s=probe tap '~로그인'              # ref 대신 선택자(~desc · id=…)도 된다 — 지금 화면에서 찾는다
 npx appium-cli -s=probe fill e5 '<값>'             # 입력한다
 npx appium-cli -s=probe swipe up                  # 손가락을 위로 (아래 내용 보기)
 npx appium-cli -s=probe back
@@ -45,7 +46,7 @@ npx appium-cli apis --session-id <id>             # 남이 연 session(kit 케�
 
 앱이 다른 꼴로 남기면 `--api-pattern '<식>'`(모임 둘: method · url)로 바꾼다.
 
-**앱 구조 훑기** — `npx appium-cli -s=probe crawl --max 50 --minutes 10` 이 화면마다 파일 · `list.json` · `links.json` · `apis.json` · `summary.json` 을 test_platform 크롤러 꼴로 `.appium-cli/crawl/`(`--out <폴더>`)에 남긴다. 이전 저장본이 있으면 `--keep <저장본 json>` — 화면마다 같음 · 바뀜 · 새 화면을 `list.json` 과 요약 줄에 낸다. 앱 첫 화면에서 시작한다(돌아오지 못하면 앱을 다시 띄워 경로를 다시 누른다). 로그아웃 · 위험 글자(삭제 · 결제 · 담기 …) 버튼은 안 누르고, 탈퇴 흐름 화면에서는 아무것도 안 누르고, 확인 창은 경고 · 탈퇴 · 입력칸이면 back 한다. 더 뺄 버튼은 `--exclude '<식>'`(여러 번, `/식/i` 꼴).
+**앱 구조 훑기** — `npx appium-cli -s=probe crawl --max 50 --minutes 10` 이 화면마다 파일 · `list.json` · `links.json` · `apis.json` · `summary.json` 을 test_platform 크롤러 꼴로 `.appium-cli/crawl/`(`--out <폴더>`)에 남긴다. 이전 저장본이 있으면 `--keep <저장본 json>` — 화면마다 같음 · 바뀜 · 새 화면을 `list.json` 과 요약 줄에 낸다. 앱 첫 화면에서 시작한다(돌아오지 못하면 앱을 다시 띄워 경로를 다시 누른다). 위험 글자(삭제 · 결제 · 담기 …) 버튼은 안 누르고(로그아웃은 로그인 판에서 다시 로그인할 수 있을 때만), 탈퇴 흐름 화면에서는 아무것도 안 누르고, 확인 창은 경고 · 탈퇴 · 입력칸이면 back 한다. 더 뺄 버튼은 `--exclude '<식>'`(여러 번, `/식/i` 꼴). 로그인 뒤 화면도 보려면 `--login <스크립트>`(`--role <역할>`, 기본 일반 회원) — 로그아웃 판 뒤 앱 데이터를 지우고 스크립트로 로그인해 한 번 더 돈다(장수 · 시간은 판마다 나눈다). 스크립트는 `appium-cli -s=<이름>` 뒤에 쓰는 명령을 한 줄에 하나(`tap` · `fill` · `back` · `swipe` 만, ref 대신 선택자, 띄어쓰기는 따옴표 — `fill '~Username input field' bob@example.com`)이고 끝나면 앱 첫 화면이어야 한다. 계정 값은 스크립트 파일에만 두고 대화 · 커밋에 싣지 않는다.
 
 **화면 키 — 앱 화면 파일(page object)에 적는다.** `npx appium-cli -s=probe screen` 이 지금 화면 키 · 이름을 한 줄로 낸다(`app:.Main/login screen · Login` — 이름이 없으면 키만). 키(` · ` 앞)를 그 화면 파일의 화면 주소 값으로 적는다 — 케이스 ↔ 화면이 이 값으로 이어진다. crawl 이 남기는 키와 같다. 코드에서는 `import { screenKey, parseSource, apiLines } from 'appium-cli'` 로 같은 규칙을 부른다(`screenKey(source xml, current_activity)`).
 

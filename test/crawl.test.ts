@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { 가라앉기 } from '../src/appium.js';
 import { run } from '../src/cli.js';
-import { type 크롤결과, 화면을가린다 } from '../src/crawl.js';
+import { type 크롤결과, 화면을가린다, 후보들 } from '../src/crawl.js';
 import { screenKey } from '../src/index.js';
 import { parseSource } from '../src/platform/android.js';
 
@@ -51,7 +51,7 @@ const 기본: 그래프 = {
   C: { 틀: { id: 'com.shop:id/c_root' }, 제목: 'Sea', 버튼: [{ text: 'c ok' }], 길: {} },
   X: { 틀: { desc: 'web' }, 제목: 'Chrome', 버튼: [], 길: {} },
 };
-// 확인 창 — 버튼은 화면 차례대로 취소(button2) · 확인(button1). 길 '<' 는 창이 닫힌다
+// 확인 창 — 버튼은 화면 차례대로 취소(button2) · 확인(button1). 길 '<' 는 창이 닫힌다, '>X' 는 닫히며 X 가 뜬다
 const 창 = (글: string, 칸: 버튼[] = []): 그래프[string] => ({
   틀: {},
   제목: 글,
@@ -92,7 +92,37 @@ const 위험앱: 그래프 = {
   W2: { 틀: { desc: 'settings screen' }, 제목: '회원탈퇴', 버튼: [{ desc: 'confirm leave' }], 길: {} },
   P: { 틀: { desc: 'login screen' }, 제목: 'Login', 버튼: [{ cls: 'EditText', desc: 'username input' }, { cls: 'EditText', desc: 'password input', password: true }], 길: {} },
 };
+// 로그인 앱 — 로그인하면 안화면들로 그린다. 길 '로그인' 은 user · pass 가 맞으면 로그인해 첫 화면으로, '로그아웃' 은 로그인 화면으로
+const 밖: 그래프 = {
+  A: { 틀: { desc: 'home' }, 제목: 'Home', 버튼: [{ desc: 'to menu' }, { desc: 'to cart' }], 길: { 'to menu': 'M', 'to cart': 'K' } },
+  M: {
+    틀: { desc: 'menu' },
+    제목: 'Menu',
+    버튼: [{ desc: 'log in' }, { desc: 'menu item log out' }, { desc: 'about' }],
+    길: { 'log in': 'P', 'menu item log out': '로그아웃', about: 'AB' },
+  },
+  P: {
+    틀: { desc: 'login screen' },
+    제목: 'Login',
+    버튼: [{ cls: 'EditText', desc: 'user' }, { cls: 'EditText', desc: 'pass', password: true }, { desc: 'login button' }],
+    길: { 'login button': '로그인' },
+  },
+  K: { 틀: { desc: 'cart' }, 제목: 'Cart', 버튼: [{ desc: 'checkout' }], 길: { checkout: 'P' } },
+  AB: { 틀: { desc: 'about' }, 제목: 'About', 버튼: [], 길: {} },
+};
+const 안: 그래프 = {
+  ...밖,
+  A: { ...밖.A!, 버튼: [...밖.A!.버튼, { desc: 'profile' }], 길: { ...밖.A!.길, profile: 'PR' } },
+  K: { ...밖.K!, 길: { checkout: 'CH' } },
+  CH: { 틀: { desc: 'checkout' }, 제목: 'Checkout', 버튼: [], 길: {} },
+  PR: { 틀: { desc: 'profile' }, 제목: 'Profile', 버튼: [], 길: {} },
+};
 let 화면들 = 기본;
+let 안화면들: 그래프 | null = null;
+let 로그인됨 = false;
+let 입력: Record<string, string> = {};
+let clearApp막힘 = false;
+const 그래프 = (): 그래프 => (로그인됨 && 안화면들 !== null ? 안화면들 : 화면들);
 const 이름 = (b: 버튼): string => b.desc || b.id || b.text || '';
 
 const fetchMock = vi.fn();
@@ -105,12 +135,18 @@ let 로그: string[] = [];
 
 function 누름(i: number): void {
   const 위 = 쌓임.at(-1)!;
-  const b = 화면들[위]!.버튼[i]!;
+  const b = 그래프()[위]!.버튼[i]!;
   눌림.push(`${위} ${이름(b)}`);
   if (b.api !== undefined) 로그.push(`10-20 10:07:55.318  4242  4300 I okhttp.OkHttpClient: --> GET https://api.shop/${b.api}?token=t1`);
-  const 다음 = 화면들[위]!.길[이름(b)];
+  const 다음 = 그래프()[위]!.길[이름(b)];
   if (다음 === '<') 쌓임.pop();
-  else if (다음 !== undefined) 쌓임.push(다음);
+  else if (다음?.startsWith('>')) 쌓임.splice(-1, 1, 다음.slice(1)); // 창이 닫히며 다음 창이 뜬다
+  else if (다음 === '로그인') {
+    if (입력.user === 'bob' && 입력.pass === 'secret') [로그인됨, 쌓임] = [true, ['A']];
+  } else if (다음 === '로그아웃') {
+    로그인됨 = false;
+    쌓임.push('P');
+  } else if (다음 !== undefined) 쌓임.push(다음);
 }
 
 beforeEach(async () => {
@@ -118,6 +154,7 @@ beforeEach(async () => {
   process.chdir(mkdtempSync(join(tmpdir(), 'appium-cli-')));
   쌓임 = ['A'];
   화면들 = 기본;
+  [안화면들, 로그인됨, 입력, clearApp막힘] = [null, false, {}, false];
   로그 = ['10-20 10:00:00.000  4242  4300 I okhttp.OkHttpClient: --> GET https://api.shop/old'];
   fetchMock.mockReset();
   fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
@@ -131,12 +168,17 @@ beforeEach(async () => {
       return 답(줄);
     }
     if (path.endsWith('/source')) {
-      const h = 화면들[위]!;
+      const h = 그래프()[위]!;
       return 답(XML(h.틀, h.제목, h.버튼));
     }
     if (path.endsWith('/current_activity')) return 답(위 === 'X' ? '.Browser' : '.Main');
     if (path.endsWith('/current_package')) return 답(위 === 'X' ? 'com.android.chrome' : 'com.shop');
-    if (path.endsWith('/element')) return 답({ 'element-6066-11e4-a5ab-c8d2b5b44a87': String(화면들[위]!.버튼.findIndex((b) => (b.desc ?? b.id) === body.value)) });
+    if (path.endsWith('/element')) {
+      const i = 그래프()[위]!.버튼.findIndex((b) => (b.desc ?? b.id) === body.value);
+      return i < 0 ? new Response(JSON.stringify({ value: { error: 'no such element', message: 'none' } }), { status: 404 }) : 답({ 'element-6066-11e4-a5ab-c8d2b5b44a87': String(i) });
+    }
+    const 넣은요소 = /\/element\/(\d+)\/value$/.exec(path);
+    if (넣은요소) 입력[이름(그래프()[위]!.버튼[Number(넣은요소[1])]!)] = String(body.text);
     const 눌린요소 = /\/element\/(\d+)\/click$/.exec(path);
     if (눌린요소) 누름(Number(눌린요소[1]));
     if (path.endsWith('/actions')) {
@@ -150,7 +192,9 @@ beforeEach(async () => {
     if (path.endsWith('/execute/sync')) {
       const { script, args } = body as { script: string; args: { appId: string }[] };
       부름.push(`${script} ${args[0]!.appId}`);
-      쌓임 = script === 'mobile: terminateApp' ? [] : ['A'];
+      if (script === 'mobile: clearApp' && clearApp막힘) return new Response(JSON.stringify({ value: { error: 'unknown error', message: 'not allowed' } }), { status: 500 });
+      if (script === 'mobile: clearApp') [로그인됨, 입력] = [false, {}];
+      쌓임 = script === 'mobile: activateApp' ? ['A'] : [];
     }
     return 답(null);
   });
@@ -172,7 +216,7 @@ describe('crawl', () => {
     const out = await run(['-s=c', 'crawl'], env);
 
     expect(out).toMatch(
-      /^크롤: 로그아웃 3장 · 연결 3개 · API 4개 · 누름 6번 · 재시작 2번 · 확인 창 0번 · 저장본 없음 · 멈춘 까닭 다 봄 · [\d.]+초 · \.appium-cli\/crawl\/list\.json\n- Snapshot: /,
+      /^크롤: 로그아웃 3장 · 목록 3장 · 연결 3개 · API 4개 · 누름 6번 · 재시작 2번 · 확인 창 0번 · 저장본 없음 · 멈춘 까닭 다 봄 · [\d.]+초 · \.appium-cli\/crawl\/list\.json\n- Snapshot: /,
     );
     const r = 결과();
     expect(r.app).toBe('com.shop');
@@ -183,9 +227,9 @@ describe('crawl', () => {
       ['app:.Main/com.shop:id/c_root', 'Sea', ['To C']],
     ]);
     expect(r.links).toEqual([
-      { from: 'app:.Main/a screen', to: 'app:.Main/b screen', via: '버튼 「to b」' },
-      { from: 'app:.Main/a screen', to: 'app:.Main/com.shop:id/c_root', via: '버튼 「To C」' },
-      { from: 'app:.Main/b screen', to: 'app:.Main/com.shop:id/c_root', via: '버튼 「to c」' },
+      { 상태: '로그아웃', from: 'app:.Main/a screen', to: 'app:.Main/b screen', via: '버튼 「to b」' },
+      { 상태: '로그아웃', from: 'app:.Main/a screen', to: 'app:.Main/com.shop:id/c_root', via: '버튼 「To C」' },
+      { 상태: '로그아웃', from: 'app:.Main/b screen', to: 'app:.Main/com.shop:id/c_root', via: '버튼 「to c」' },
     ]);
   });
 
@@ -257,6 +301,19 @@ describe('crawl', () => {
     expect(눌림).not.toContain('D1 android:id/button1');
     expect(결과().dialogs.누름).toBe(1);
     expect(결과().screens.length).toBeGreaterThan(1);
+  });
+
+  it('확인 뒤 이어 뜬 창(버튼 칸이 빈 제목만의 창)도 닫고 화면으로 남기지 않는다', async () => {
+    화면들 = {
+      A: { 틀: { desc: 'a screen' }, 제목: 'Home', 버튼: [{ desc: 'reset' }], 길: { reset: 'R1' } },
+      R1: { ...창('Reset app state?'), 길: { 'android:id/button1': '>R2', 'android:id/button2': '<' } },
+      R2: { 틀: {}, 제목: '', 버튼: [{ cls: 'TextView', id: 'android:id/alertTitle', text: 'App State has been reset.' }], 길: {} },
+    };
+
+    await run(['-s=c', 'crawl'], env);
+
+    expect(결과().dialogs).toEqual({ 누름: 1, 남음: 1 });
+    expect(결과().screens.map((s) => s.key)).toEqual(['app:.Main/a screen']);
   });
 
   it('--max 는 1 ~ 100 장만 받는다', async () => {
@@ -354,6 +411,111 @@ describe('crawl 결과 파일', () => {
   });
 });
 
+describe('crawl --login', () => {
+  const 스크립트 = "# 로그인 — appium-cli 명령 한 줄씩\ntap '~to menu'\ntap \"~log in\"\n\nfill ~user bob\nfill ~pass secret\ntap '~login button'\n";
+  const 키 = (x: string): string => `app:.Main/${x}`;
+  const 로그인판 = '로그인:일반 회원';
+  beforeEach(() => {
+    [화면들, 안화면들] = [밖, 안];
+    writeFileSync('login.txt', 스크립트);
+  });
+
+  it('로그아웃 판 뒤 앱을 비우고 로그인해 로그인 판을 돌고, 로그인 화면이 뜨면 다시 로그인해 한 번 더 누르고, 로그아웃은 다시 로그인할 수 있을 때만 누른다', async () => {
+    const out = await run(['-s=c', 'crawl', '--login', 'login.txt', '--max', '40'], env);
+
+    expect(out).toMatch(/^크롤: 로그아웃 5장 · 로그인:일반 회원 7장 · 목록 8장 · .* · 다시 로그인 2번\(앱 비우기 mobile: clearApp\) · 저장본 없음 · 멈춘 까닭 다 봄 · /);
+    const r = 결과();
+    expect(r.screens.map((s) => [s.상태, s.key, s.로그인풀림 ?? false])).toEqual([
+      ['로그아웃', 키('home'), false],
+      ['로그아웃', 키('menu'), false],
+      ['로그아웃', 키('cart'), false],
+      ['로그아웃', 키('login screen'), true], // 로그아웃 판에서는 표시만 — 돌기도 한다
+      ['로그아웃', 키('about'), false],
+      [로그인판, 키('home'), false],
+      [로그인판, 키('menu'), false],
+      [로그인판, 키('cart'), false],
+      [로그인판, 키('profile'), false],
+      [로그인판, 키('login screen'), true], // 다시 로그인한 뒤에도 로그인 화면 — 로그인 칸이 있는 화면으로 남기고 안 돈다
+      [로그인판, 키('about'), false],
+      [로그인판, 키('checkout'), false],
+    ]);
+    expect(r.다시로그인).toBe(2); // 'log in' 로그인 화면 한 번 · 로그아웃 한 번
+    expect(부름.filter((x) => x === 'mobile: clearApp com.shop')).toHaveLength(3); // 처음 로그인 + 다시 로그인 둘
+    expect(눌림.filter((x) => x === 'M menu item log out')).toHaveLength(1); // 로그아웃 판에서는 안 누른다
+    expect(읽기('summary.json')).toEqual({ 멈춘까닭: null, 상태들: ['로그아웃', 로그인판], 예외: false });
+  });
+
+  it('두 판을 한 폴더에 번호를 이어 쓰고, 목록은 로그인 판에도 있는 로그아웃 화면 · 로그인 판 로그인 화면을 빼고, 빠진 화면의 연결은 로그인 화면에 합친다', async () => {
+    await run(['-s=c', 'crawl', '--login', 'login.txt', '--max', '40'], env);
+
+    const 목록 = 읽기<{ 상태: string; 틀: string; 파일: string }[]>('list.json');
+    expect(목록.map((x) => [x.상태, x.틀, x.파일])).toEqual([
+      ['로그아웃', 키('home'), '로그아웃/001.yml'], // 시작 화면은 둘 다
+      ['로그아웃', 키('login screen'), '로그아웃/004.yml'],
+      [로그인판, 키('home'), '로그인/006.yml'],
+      [로그인판, 키('menu'), '로그인/007.yml'],
+      [로그인판, 키('cart'), '로그인/008.yml'],
+      [로그인판, 키('profile'), '로그인/009.yml'],
+      [로그인판, 키('about'), '로그인/011.yml'],
+      [로그인판, 키('checkout'), '로그인/012.yml'],
+    ]);
+    expect(readFileSync('.appium-cli/crawl/로그인/010.yml', 'utf8')).toMatch(/^# app:\.Main\/login screen\n# 입력칸: text user\n# 입력칸: password pass\n/);
+    const 연결 = (to: string, 버튼: string): { to: string; via: string } => ({ to: 키(to), via: `버튼 「${버튼}」` });
+    expect(읽기('links.json')).toEqual([
+      { 상태: '로그아웃', 틀: 키('home'), 연결: [연결('menu', 'to menu'), 연결('cart', 'to cart')] },
+      { 상태: 로그인판, 틀: 키('home'), 연결: [연결('menu', 'to menu'), 연결('cart', 'to cart'), 연결('profile', 'profile')] },
+      { 상태: 로그인판, 틀: 키('menu'), 연결: [연결('login screen', 'log in'), 연결('about', 'about'), 연결('login screen', 'menu item log out')] },
+      { 상태: 로그인판, 틀: 키('cart'), 연결: [연결('login screen', 'checkout'), 연결('checkout', 'checkout')] },
+    ]);
+    expect(읽기<{ 상태: string; 틀: string }[]>('apis.json').map((x) => `${x.상태} ${x.틀}`)).toEqual(목록.map((x) => `${x.상태} ${x.틀}`));
+  });
+
+  it('다시 로그인은 세 번까지 — 다 쓰면 로그아웃은 안 누른다. clearApp 을 막는 팜이면 앱만 끄고 로그인한다', async () => {
+    안화면들 = {
+      ...안,
+      M: {
+        틀: { desc: 'menu' },
+        제목: 'Menu',
+        버튼: [{ desc: 'log out a' }, { desc: 'logout b' }, { desc: 'sign out c' }, { desc: 'log off d' }],
+        길: { 'log out a': '로그아웃', 'logout b': '로그아웃', 'sign out c': '로그아웃', 'log off d': '로그아웃' },
+      },
+    };
+    clearApp막힘 = true;
+
+    const out = await run(['-s=c', 'crawl', '--login', 'login.txt', '--max', '40'], env);
+
+    expect(out).toContain('다시 로그인 3번(앱 비우기 mobile: terminateApp)');
+    expect(결과().다시로그인).toBe(3);
+    expect(눌림.filter((x) => /^M (log ?out|sign out|log off)/.test(x))).toEqual(['M log out a', 'M logout b', 'M sign out c']);
+  });
+
+  it('로그인 스크립트 뒤에도 로그인 화면이면 멈추고, 로그아웃 판까지는 남긴다', async () => {
+    writeFileSync('login.txt', 스크립트.replace('secret', 'wrong'));
+
+    await expect(run(['-s=c', 'crawl', '--login', 'login.txt'], env)).rejects.toThrow('로그인 스크립트를 돌린 뒤에도 로그인 화면이다');
+    expect(읽기('summary.json')).toEqual({ 멈춘까닭: null, 상태들: ['로그아웃'], 예외: true });
+  });
+
+  it.each([
+    ['close\n', '1줄: close 은 못 쓴다'],
+    ["# 주석\ntap e3\n", '2줄: ref 대신 선택자'],
+    ['# 빈 스크립트\n', '로그인 스크립트가 비었다'],
+  ])('스크립트 %j 는 Appium 을 부르기 전에 거절한다', async (글, 말) => {
+    writeFileSync('login.txt', 글);
+    fetchMock.mockClear();
+
+    await expect(run(['-s=c', 'crawl', '--login', 'login.txt'], env)).rejects.toThrow(말);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('--role 로 판 이름을 바꾸고, 틀린 역할은 거절한다', async () => {
+    await expect(run(['-s=c', 'crawl', '--login', 'login.txt', '--role', ' 관리자'], env)).rejects.toThrow('--role 은');
+
+    await run(['-s=c', 'crawl', '--login', 'login.txt', '--role', '관리자'], env);
+    expect(읽기('summary.json')).toMatchObject({ 상태들: ['로그아웃', '로그인:관리자'] });
+  });
+});
+
 describe('screen · screenKey', () => {
   it('screen 명령은 지금 화면 키 · 이름을 한 줄로 내고, crawl 이 남기는 키와 같다', async () => {
     쌓임 = ['A', 'B'];
@@ -387,6 +549,33 @@ describe('화면을가린다', () => {
 
   it('desc 가 없으면 앱 resource-id 를 쓰고 android:id/… 는 쓰지 않는다', () => {
     expect(화면을가린다(parseSource(XML({ id: 'com.shop:id/cart' }, 'Cart', [])), '.Main').key).toBe('app:.Main/com.shop:id/cart');
+  });
+
+  // MDA 서랍 메뉴 실측 꼴 — 메뉴 칸이 products screen 의 형제로 오고 그 자리를 덮는다. 위 머리 버튼은 컨테이너 밖이다
+  const 서랍XML = (열림: boolean): string => `<hierarchy width="1080" height="2400">
+  <android.widget.FrameLayout resource-id="android:id/content" clickable="false" bounds="[0,75][1080,2265]">
+    ${열림 ? '<android.view.ViewGroup content-desc="menu item catalog" clickable="true" bounds="[0,86][756,258]"><android.widget.TextView text="Catalog" clickable="false" bounds="[0,137][266,205]" /></android.view.ViewGroup>' : ''}
+    ${열림 ? '<android.view.ViewGroup content-desc="menu item about" clickable="true" bounds="[0,258][756,428]"><android.widget.TextView text="About" clickable="false" bounds="[0,309][292,377]" /></android.view.ViewGroup>' : ''}
+    <android.view.ViewGroup content-desc="open menu" clickable="true" bounds="[56,89][169,202]" />
+    <android.view.ViewGroup content-desc="products screen" clickable="false" bounds="[0,216][1080,2265]">
+      <android.widget.TextView text="Products" clickable="false" bounds="[56,286][345,363]" />
+      <android.view.ViewGroup content-desc="store item" clickable="false" bounds="[56,462][512,1183]">
+        <android.view.ViewGroup clickable="true" bounds="[56,462][512,993]"><android.widget.TextView text="Backpack" content-desc="store item text" clickable="false" bounds="[56,932][512,993]" /></android.view.ViewGroup>
+      </android.view.ViewGroup>
+      <android.view.ViewGroup content-desc="store item" clickable="false" bounds="[568,462][1024,1183]">
+        <android.view.ViewGroup clickable="true" bounds="[568,462][1024,993]"><android.widget.TextView text="Bike Light" content-desc="store item text" clickable="false" bounds="[568,932][1024,993]" /></android.view.ViewGroup>
+      </android.view.ViewGroup>
+    </android.view.ViewGroup>
+  </android.widget.FrameLayout>
+</hierarchy>`;
+
+  it('서랍 메뉴처럼 컨테이너 밑이 아닌 누를 것이 컨테이너 자리를 덮으면 그 덮개가 이름표다 — 뒤 화면과 키가 뭉치지 않는다', () => {
+    expect(화면을가린다(parseSource(서랍XML(false)), '.MainActivity')).toMatchObject({ key: 'app:.MainActivity/products screen', name: 'Products' });
+    expect(화면을가린다(parseSource(서랍XML(true)), '.MainActivity')).toMatchObject({ key: 'app:.MainActivity/menu item about', name: 'About' }); // catalog 는 가운데가 컨테이너 위다
+  });
+
+  it('이름 없는 버튼은 자손의 첫 desc · 글자로 부르고, 같은 이름은 앞 것만 누른다', () => {
+    expect(후보들(parseSource(서랍XML(false))).map((x) => x.이름)).toEqual(['open menu', 'store item text']);
   });
 
   it('이름표가 없으면 구조 지문 — 글자 · 숫자만 바뀌면 같고 짜임이 바뀌면 다르다', () => {

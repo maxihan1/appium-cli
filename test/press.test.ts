@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { 요소 } from '../src/platform/android.js';
 import { 되돌릴수없나, 로그인화면인가, 안누를까닭, 탈퇴말인가, 확인버튼고르기, 확인창 } from '../src/press.js';
 
-const 요소 = (x: Partial<요소>): 요소 => ({ cls: 'Button', text: '', desc: '', id: '', bounds: '', 누름: true, 비밀번호: false, 꺼짐: false, ...x });
+const 요소 = (x: Partial<요소>): 요소 => ({ cls: 'Button', text: '', desc: '', id: '', bounds: '', 누름: true, 비밀번호: false, 꺼짐: false, 깊이: 0, ...x });
 
 describe('안누를까닭', () => {
   it.each([
@@ -100,6 +100,7 @@ describe('확인창', () => {
     ['되돌릴 수 없음', [글('This action cannot be undone'), ...버튼들], false, '경고'],
     ['입력칸', [요소({ cls: 'EditText', desc: 'name' }), ...버튼들], false, '입력'],
     ['누를 버튼 없음', [글('완료'), 요소({ id: 'android:id/button2', text: 'Cancel' })], false, '남음'],
+    ['버튼 칸이 빈 창(제목만)', [요소({ cls: 'TextView', id: 'android:id/alertTitle', text: 'App State has been reset.', 누름: false })], false, '남음'],
   ] as const)('%s → %s', (_, els, 탈퇴로, 결과) => {
     expect(확인창(els, 탈퇴로)).toEqual({ 결과 });
   });

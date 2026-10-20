@@ -20,6 +20,7 @@ npx appium-cli hold --minutes 30               # 폰을 잡는다
 npx appium-cli -s=probe open                   # 앱을 띄우고 첫 화면을 찍는다
 npx appium-cli -s=probe find --regex "/log ?in/i"
 npx appium-cli -s=probe tap e19                # Ran: await driver.$('~menu item log in').click()
+npx appium-cli -s=probe tap '~open menu'       # ref 대신 선택자도 된다 — 지금 화면에서 찾는다(앱이 뜨는 동안 10초까지 기다린다)
 npx appium-cli -s=probe fill e11 'bob@example.com'
 npx appium-cli -s=probe generate-locator e17   # driver.$('~Login button')
 npx appium-cli -s=probe close
@@ -49,20 +50,34 @@ npx appium-cli -s=probe crawl --exclude '/설정|settings/i' --exclude 'com.shop
 npx appium-cli -s=probe crawl --out ../data/crawl --keep ../data/kept/index.json   # 저장본과 같음 · 바뀜 · 새 화면
 ```
 
+`--login <스크립트>` 면 로그아웃 판을 돈 뒤 앱 데이터를 지우고(`mobile: clearApp`, 팜이 막으면 `terminateApp` 으로 끄기만) 스크립트로 로그인해 `로그인:<역할>` 판(`--role`, 기본 `일반 회원`)을 돈다. `--max` · `--minutes` 는 판마다 나눈다(앞 판이 덜 쓴 장수는 뒤로).
+스크립트는 `appium-cli -s=<이름>` 뒤에 쓰는 명령을 한 줄에 하나씩 — `tap` · `fill` · `back` · `swipe` 만, `tap` · `fill` 은 ref 대신 선택자(`~desc` · `id=…`)로, 띄어쓰기는 따옴표로 묶는다. 빈 줄 · `#` 줄은 건너뛴다. 끝나면 앱 첫 화면이어야 한다(크롤이 앱을 다시 띄워 거기서 경로를 누른다).
+
+```
+# login.txt — MDA
+tap '~open menu'
+tap '~menu item log in'
+fill '~Username input field' bob@example.com
+fill '~Password input field' 10203040
+tap '~Login button'
+```
+
+로그인 판에서 로그인 화면(아이디 칸 + 비밀번호 칸)이 뜨면 앱을 비우고 다시 로그인해 그 버튼을 한 번 더 누른다 — 또 뜨면 로그인 칸이 있는 화면으로 남기고 목록에서 뺀다. 로그아웃 버튼은 다시 로그인할 수 있을 때만 누른다. 다시 로그인은 세 번까지.
+
 결과는 test_platform 크롤러 출력 꼴이다(`--out`, 기본 `.appium-cli/crawl/`) — 화면 키가 그쪽 주소 · 틀 자리에 든다.
 
 | 파일 | 내용 |
 |------|------|
-| `로그아웃/NNN.yml` | 화면 파일 — `# <화면 키>` · `# 입력칸: text 또는 password <desc 또는 id>[ · 읽기 전용]` · 화면 글 |
-| `list.json` | `[{주소, 이름, 상태, 파일, 틀, 지문, 글자지문, 저장본?, 저장기록?}]` |
-| `links.json` | `[{상태, 틀, 연결: [{to, via: "버튼 「이름」"}]}]` |
+| `로그아웃/NNN.yml` · `로그인/NNN.yml` | 화면 파일 — `# <화면 키>` · `# 입력칸: text 또는 password <desc 또는 id>[ · 읽기 전용]` · 화면 글. 번호는 판을 이어 매긴다 |
+| `list.json` | `[{주소, 이름, 상태, 파일, 틀, 지문, 글자지문, 저장본?, 저장기록?}]` — 로그인 판에도 있는 키의 로그아웃 화면은 뺀다(시작 화면은 둘 다) |
+| `links.json` | `[{상태, 틀, 연결: [{to, via: "버튼 「이름」"}]}]` — 빠진 로그아웃 화면의 연결은 같은 키의 로그인 화면에 합친다 |
 | `apis.json` | `[{상태, 틀, api: [{method, url}]}]` — 누른 뒤 logcat 의 API 는 간 화면 몫(안 바뀌었으면 누른 화면) |
 | `summary.json` | `{멈춘까닭, 상태들, 예외}` |
-| `index.json` | 크롤 원자료(경로 · 탈퇴흐름 · 로그인풀림 · 확인 창 셈) |
+| `index.json` | 크롤 원자료(판 · 경로 · 탈퇴흐름 · 로그인풀림 · 확인 창 셈 · 다시 로그인 · 앱 비우기) |
 
 `--keep` 은 test_platform 저장본(`{판: 1, 항목: [{키, 상태, 틀, 주소, 지문, 글자지문, 기록, 훑은날}]}`)을 받는다 — 글자지문이 같고 30일 안이면 같음.
 
-안 누르는 것 — 로그아웃(늘) · 12자 이하 이름이나 resource-id 에 위험 글자(삭제 · 결제 · 담기 · 해지 · delete · remove …)가 든 버튼 · `--exclude` 식에 맞는 이름(desc → id → 글자). 탈퇴 버튼은 누르되 그 뒤 화면(이름에 탈퇴가 든 화면도)에서는 아무것도 안 누른다. 누른 뒤 Android 확인 창이 뜨면 탈퇴 · 되돌릴 수 없음 경고 · 입력칸이면 back, 아니면 확인 버튼 하나를 누른다(`index.json` `dialogs`). 아이디 칸 + 비밀번호 칸이 같이 뜬 화면은 `로그인풀림: true`.
+안 누르는 것 — 로그아웃(로그인 판에서 다시 로그인할 수 있을 때만 누른다) · 12자 이하 이름이나 resource-id 에 위험 글자(삭제 · 결제 · 담기 · 해지 · delete · remove …)가 든 버튼 · `--exclude` 식에 맞는 이름(desc → id → 글자). 탈퇴 버튼은 누르되 그 뒤 화면(이름에 탈퇴가 든 화면도)에서는 아무것도 안 누른다. 누른 뒤 Android 확인 창이 뜨면 탈퇴 · 되돌릴 수 없음 경고 · 입력칸이면 back, 아니면 확인 버튼 하나를 누른다(`index.json` `dialogs`). 아이디 칸 + 비밀번호 칸이 같이 뜬 화면은 `로그인풀림: true`(로그아웃 판에서는 표시만).
 
 ## 화면 키 · 라이브러리
 

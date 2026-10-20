@@ -6,9 +6,9 @@ import type { 크롤결과 } from './crawl.js';
 import type { 화면 } from './platform/android.js';
 import { 입력칸인가 } from './press.js';
 
-/** test_platform `상태`(authoring-screens-keep.ts) · DB CHECK 와 같은 꼴 — 로그인 판은 F5-05 */
+/** test_platform `상태`(authoring-screens-keep.ts) · DB CHECK 와 같은 꼴 */
 export type 상태 = '로그아웃' | `로그인:${string}`;
-const 상태인가 = (v: unknown): v is 상태 => v === '로그아웃' || (typeof v === 'string' && /^로그인:\S(?:.{0,38}\S)?$/su.test(v));
+export const 상태인가 = (v: unknown): v is 상태 => v === '로그아웃' || (typeof v === 'string' && /^로그인:\S(?:.{0,38}\S)?$/su.test(v));
 
 /**
  * 화면 파일 글 — 머리 `# <화면 키>`, 입력칸 줄(test_platform `칸줄` 꼴), 화면 글. 이것이 test_platform `record` 이고 글자지문 재료다.
@@ -92,32 +92,49 @@ export function 견주기(
 }
 
 /**
- * 결과 폴더에 쓸 파일(상대 경로 → 글)과 요약 줄의 저장본 조각. 칸 이름은 test_platform 크롤러 출력과 같고 화면 키가 그쪽 주소 · 틀 자리에 든다.
- * 화면 파일은 `<상태 폴더>/NNN.yml` — 글은 YAML 이 아니지만 test_platform `이번것들` 이 `NNN.yml` 로 기록 번호를 맞춘다
+ * 결과 폴더에 쓸 파일(상대 경로 → 글)과 요약 줄 조각. 칸 이름은 test_platform 크롤러 출력과 같고 화면 키가 그쪽 주소 · 틀 자리에 든다.
+ * 화면 파일은 `<상태 폴더>/NNN.yml`, 번호는 판을 이어 매긴다 — 글은 YAML 이 아니지만 test_platform `이번것들` 이 `NNN.yml` 로 기록 번호를 맞춘다.
+ * 목록은 test_platform `목록고르기` — 로그인 판의 로그인풀림 화면은 빼고, 로그인 판에도 있는 키의 로그아웃 화면은 뺀다(시작 화면은 둘 다).
+ * 연결 · API 는 `연결모으기` — 빠진 로그아웃 화면 몫은 같은 키의 로그인 화면에 합친다
  */
-export function 결과파일들(r: 크롤결과, 상태: 상태, 저장: 저장본 | null, 오늘: string): { 파일들: Map<string, string>; 저장본: string } {
-  const 폴더 = 상태 === '로그아웃' ? '로그아웃' : '로그인';
-  const 화면들 = r.screens.map((s, i) => ({ ...s, 상태, 파일: `${폴더}/${String(i + 1).padStart(3, '0')}.yml`, textFp: 글자지문(s.record) }));
-  const 견줌 = 저장 === null ? null : 견주기(화면들.map((s) => ({ 상태, 틀: s.key, 글자지문: s.textFp })), 저장, 오늘);
-  const 목록 = 화면들.map((s) => ({
-    주소: s.key, 이름: s.name, 상태, 파일: s.파일, 틀: s.key, 지문: s.structFp, 글자지문: s.textFp, ...견줌?.표시.get(`${상태} ${s.key}`),
+export function 결과파일들(r: 크롤결과, 저장: 저장본 | null, 오늘: string): { 파일들: Map<string, string>; 저장본: string; 목록수: number } {
+  const 화면들 = r.screens.map((s, i) => ({
+    ...s, 파일: `${s.상태 === '로그아웃' ? '로그아웃' : '로그인'}/${String(i + 1).padStart(3, '0')}.yml`, textFp: 글자지문(s.record),
   }));
-  // 화면 연결 — 같은 곳 · 같은 버튼은 하나로, 남긴 화면에서 나간 것만
-  const 연결 = 화면들.flatMap((s) => {
-    const 칸 = new Map(r.links.filter((l) => l.from === s.key).map((l) => [`${l.to} ${l.via}`, { to: l.to, via: l.via }]));
-    return 칸.size === 0 ? [] : [{ 상태, 틀: s.key, 연결: [...칸.values()] }];
-  });
+  type 칸 = (typeof 화면들)[number];
+  const 로그인키 = new Set(화면들.filter((s) => s.상태 !== '로그아웃' && !s.로그인풀림).map((s) => s.key));
+  const 고른 = 화면들.filter((s, i) => (s.상태 === '로그아웃' ? i === 0 || !로그인키.has(s.key) : !s.로그인풀림));
+  const 자리 = (s: 칸): 칸 | undefined => (고른.includes(s) ? s : 고른.find((x) => x.상태 !== '로그아웃' && x.key === s.key));
+  const 모으기 = <V>(뽑기: (s: 칸) => [string, V][]): Map<칸, Map<string, V>> => {
+    const 모은 = new Map<칸, Map<string, V>>();
+    for (const s of 화면들) {
+      const 갈곳 = 자리(s);
+      if (갈곳 === undefined) continue;
+      const 합 = 모은.get(갈곳) ?? new Map<string, V>();
+      for (const [키, 값] of 뽑기(s)) 합.set(키, 값);
+      모은.set(갈곳, 합);
+    }
+    return 모은;
+  };
+  const 견줌 = 저장 === null ? null : 견주기(고른.map((s) => ({ 상태: s.상태, 틀: s.key, 글자지문: s.textFp })), 저장, 오늘);
+  const 목록 = 고른.map((s) => ({
+    주소: s.key, 이름: s.name, 상태: s.상태, 파일: s.파일, 틀: s.key, 지문: s.structFp, 글자지문: s.textFp, ...견줌?.표시.get(`${s.상태} ${s.key}`),
+  }));
+  // 화면 연결 — 같은 곳 · 같은 버튼은 하나로, 연결 있는 화면만
+  const 연결 = 모으기((s) => r.links.filter((l) => l.상태 === s.상태 && l.from === s.key).map((l) => [`${l.to} ${l.via}`, { to: l.to, via: l.via }]));
+  const API = 모으기((s) => s.apis.map((a) => [`${a.method} ${a.url}`, a]));
   const 파일들 = new Map<string, string>(화면들.map((s) => [s.파일, s.record]));
   // 화면 글은 화면 파일에 있으니 index 에는 안 싣는다
   파일들.set('index.json', JSON.stringify({ ...r, screens: 화면들.map(({ record: _, ...s }) => s) }, null, 1));
   파일들.set('list.json', JSON.stringify(목록, null, 1));
-  파일들.set('links.json', JSON.stringify(연결));
-  파일들.set('apis.json', JSON.stringify(화면들.map((s) => ({ 상태, 틀: s.key, api: s.apis }))));
-  // 에이전트가 저장본에서 못 본 화면을 지울지 본다 — 도중에 죽었으면 그 상태는 다 돈 것이 아니다
-  파일들.set('summary.json', JSON.stringify({ 멈춘까닭: r.stopped, 상태들: r.예외 === undefined ? [상태] : [], 예외: r.예외 !== undefined }));
+  파일들.set('links.json', JSON.stringify(고른.flatMap((s) => (연결.get(s)?.size ? [{ 상태: s.상태, 틀: s.key, 연결: [...연결.get(s)!.values()] }] : []))));
+  파일들.set('apis.json', JSON.stringify(고른.map((s) => ({ 상태: s.상태, 틀: s.key, api: [...(API.get(s)?.values() ?? [])].slice(0, 200) } /* 서버 상한 */))));
+  // 에이전트가 저장본에서 못 본 화면을 지울지 본다 — 도중에 죽었으면 그 판은 다 돈 것이 아니다
+  파일들.set('summary.json', JSON.stringify({ 멈춘까닭: r.stopped, 상태들: r.상태들, 예외: r.예외 !== undefined }));
   const 셈 = (x: 표시['저장본']): number => 목록.filter((m) => m.저장본 === x).length;
   return {
     파일들,
+    목록수: 목록.length,
     저장본: 견줌 === null ? '저장본 없음' : `저장본 같음 ${셈('같음')} · 바뀜 ${셈('바뀜')} · 새 화면 ${셈('새 화면')} · 저장본에 있는데 못 본 화면 ${견줌.못본.length}`,
   };
 }

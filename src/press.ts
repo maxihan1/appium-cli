@@ -47,14 +47,15 @@ export type 창결과 = '탈퇴' | '경고' | '입력' | '누름' | '남음';
 export const 입력칸인가 = (e: 요소): boolean => /EditText|AutoCompleteTextView/.test(e.cls);
 
 /**
- * Android 확인 창(AlertDialog — 버튼 `android:id/button1` 확인 · `button2` 취소 · `button3` 가운데)이면 무엇을 할지, 창이 아니면 null.
+ * Android 확인 창(AlertDialog — 버튼 `android:id/button1` 확인 · `button2` 취소 · `button3` 가운데, 버튼이 비면 `android:id/alertTitle` · `parentPanel`)이면 무엇을 할지, 창이 아니면 null.
  * 탈퇴 글 · 되돌릴 수 없다는 경고 · 입력칸이 있으면 안 누르고, 아니면 확인 버튼 하나. 누를 버튼이 없으면 '남음'.
  * 탈퇴로 = 탈퇴 이름을 눌러 뜬 창 — 글이 무엇이든 안 누른다
  */
 export function 확인창(els: readonly 요소[], 탈퇴로 = false): { 결과: 창결과; 버튼?: 요소 } | null {
   // 화면 차례가 button3 · button2 · button1 이 아닐 수 있어 id 로 줄 세운다 — 확인(button1)이 마지막
   const 버튼들 = els.filter((e) => /^android:id\/button[123]$/.test(e.id)).sort((a, b) => b.id.localeCompare(a.id));
-  if (버튼들.length === 0) return null;
+  // 버튼 없이 제목 · 틀만 온 창도 창이다 — UiAutomator2 가 버튼 칸을 비워 줄 때가 있다(MDA 「App State has been reset.」 실측)
+  if (버튼들.length === 0 && !els.some((e) => /^android:id\/(?:alertTitle|parentPanel)$/.test(e.id))) return null;
   const 글 = els.map((e) => `${e.text} ${e.desc}`).join(' ');
   if (탈퇴로 || 탈퇴말.test(글)) return { 결과: '탈퇴' };
   if (되돌릴수없나(글)) return { 결과: '경고' };

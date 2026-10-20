@@ -58,8 +58,8 @@ export async function logcat을읽는다(c: 연결, sid: string): Promise<string
   return (v ?? []).map((e) => e.message);
 }
 
-// 테스트가 줄일 수 있게 묶어 둔다
-export const 가라앉기 = { 최대_ms: 3000, 간격_ms: 300 };
+// 테스트가 줄일 수 있게 묶어 둔다. 찾기_ms 는 선택자로 찾을 때 — 앱 데이터를 지운 뒤 처음 뜨는 데 몇 초 걸린다
+export const 가라앉기 = { 최대_ms: 3000, 간격_ms: 300, 찾기_ms: 10_000 };
 
 async function 읽어온다(c: 연결, sid: string): Promise<화면> {
   const xml = await 부른다(c, 'GET', `/session/${sid}/source`);

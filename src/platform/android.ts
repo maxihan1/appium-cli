@@ -11,6 +11,8 @@ export interface 요소 {
   비밀번호: boolean;
   // enabled=false — 화면 파일 입력칸 줄의 「읽기 전용」
   꺼짐: boolean;
+  // XML 깊이 — 문서 차례와 함께 자손을 가린다(컨테이너 밑인지 · 이름 없는 버튼의 자식 글자)
+  깊이: number;
 }
 
 export interface 화면 {
@@ -80,7 +82,7 @@ export function parseSource(xml: string): 화면 {
     if (남김) {
       const ref = `e${Object.keys(refs).length + 1}`;
       const cls = 이름!.split('.').pop()!;
-      refs[ref] = { cls, text: 글, desc: 이름표, id, bounds: a.bounds ?? '', 누름, 비밀번호: a.password === 'true', 꺼짐: a.enabled === 'false' };
+      refs[ref] = { cls, text: 글, desc: 이름표, id, bounds: a.bounds ?? '', 누름, 비밀번호: a.password === 'true', 꺼짐: a.enabled === 'false', 깊이: 조상.length };
       const 칸 = [cls];
       if (글 !== '') 칸.push(`text=${JSON.stringify(글)}`);
       if (이름표 !== '') 칸.push(`desc=${JSON.stringify(이름표)}`);

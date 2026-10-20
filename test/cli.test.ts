@@ -34,7 +34,7 @@ function 가짜(): void {
 const 부른길 = (): string[] => (fetchMock.mock.calls as [string, RequestInit][]).map(([u, i]) => `${i.method} ${u.replace('http://farm:4723/wd/hub', '')}`);
 
 beforeEach(async () => {
-  Object.assign(가라앉기, { 최대_ms: 0, 간격_ms: 0 });
+  Object.assign(가라앉기, { 최대_ms: 0, 간격_ms: 0, 찾기_ms: 10_000 });
   process.chdir(mkdtempSync(join(tmpdir(), 'appium-cli-')));
   fetchMock.mockReset();
   가짜();
@@ -105,6 +105,32 @@ describe('tap', () => {
 
     expect(부른길()[0]).toBe('POST /session/s-1/actions');
     expect(out.split('\n')[0]).toBe('Ran: // 주소 없음 — desc 도 id 도 없다. text= 로 찾지 않는다 (좌표 20,30 를 눌렀다)');
+  });
+
+  it('ref 대신 선택자(~desc · id=)를 주면 마지막 화면을 안 보고 그 선택자로 찾아 누르고 넣는다', async () => {
+    const 누름 = await run(['-s=probe', 'tap', '~Login button'], env);
+    const 넣음 = await run(['-s=probe', 'fill', 'id=com.shop:id/pw', 'secret'], env);
+
+    expect(부른길().filter((p) => !p.endsWith('/source'))).toEqual([
+      'POST /session/s-1/element',
+      'POST /session/s-1/element/el-9/click',
+      'POST /session/s-1/element',
+      'POST /session/s-1/element/el-9/value',
+    ]);
+    const 찾음 = (fetchMock.mock.calls as [string, RequestInit][]).filter(([u]) => u.endsWith('/element')).map(([, i]) => JSON.parse(i.body as string));
+    expect(찾음).toEqual([{ using: 'accessibility id', value: 'Login button' }, { using: 'id', value: 'com.shop:id/pw' }]);
+    expect(누름.split('\n')[0]).toBe("Ran: await driver.$('~Login button').click()");
+    expect(넣음.split('\n')[0]).toBe("Ran: await driver.$('id=com.shop:id/pw').setValue('secret')");
+  });
+
+  it('선택자로 못 찾으면 찾기_ms 동안 다시 찾고 까닭을 붙여 던진다', async () => {
+    가라앉기.찾기_ms = 0;
+    const 기본 = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) =>
+      url.endsWith('/element') ? 답({ error: 'no such element', message: 'none' }, 404) : 기본(url, init),
+    );
+
+    await expect(run(['-s=probe', 'tap', '~없는 버튼'], env)).rejects.toThrow('~없는 버튼 를 지금 화면에서 못 찾았다 — Appium 이 HTTP 404 로 답했다: none');
   });
 
   it('마지막 화면에 없는 ref 는 Appium 을 부르지 않고 던진다', async () => {

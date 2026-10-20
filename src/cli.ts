@@ -4,9 +4,9 @@ import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { parseArgs } from 'node:util';
 
-import { logcat을읽는다, 연결주소, 부른다, 요소를찾는다, 좌표를누른다, 화면을기다린다, type 연결 } from './appium.js';
+import { logcat을읽는다, 가라앉기, 연결주소, 부른다, 요소를찾는다, 좌표를누른다, 화면을기다린다, type 연결 } from './appium.js';
 import { crawl, 본다 } from './crawl.js';
-import { 결과파일들, 저장본모양 } from './crawl-out.js';
+import { 결과파일들, 상태인가, 저장본모양 } from './crawl-out.js';
 import { apiLines } from './logcat.js';
 import { capabilities, center, locatorFor, w3c, type 요소 } from './platform/android.js';
 
@@ -35,8 +35,8 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
   open [--app <apk|URL>] [--udid <id>] [--filter <조건>]   앱을 띄우고 첫 화면을 찍는다
   snapshot [--raw]                   화면을 파일로 떨군다 (--raw 면 글을 그대로)
   find <글자> | --regex <식>           마지막 화면에서 줄을 찾는다
-  tap <ref>                          누른다 (click 도 같다)
-  fill <ref> <값>                     입력한다
+  tap <ref|선택자>                     누른다 (click 도 같다). 선택자 '~desc' · 'id=…' 는 지금 화면에서 찾는다
+  fill <ref|선택자> <값>                입력한다
   swipe up|down|left|right           손가락을 그 방향으로 민다
   back                               뒤로
   screenshot [--filename <파일>]       스크린샷
@@ -46,10 +46,13 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
   list                               열린 session 목록
   logs [--grep <식>] [--api]          logcat 새 줄 (첫 호출은 쌓인 줄을 버린다) · --api 면 API 줄만 METHOD URL
   apis --session-id <id> | --file <logcat.txt>   남이 연 session · 팜 logcat 파일에서 API 를 [{method,url,at}] JSON 으로
-  crawl [--max 50] [--minutes 10] [--exclude <식>] [--out <폴더>] [--keep <저장본>]
+  crawl [--max 50] [--minutes 10] [--exclude <식>] [--out <폴더>] [--keep <저장본>] [--login <스크립트> [--role <역할>]]
                                      지금 화면부터 눌러 가며 화면 파일 · list · index · links · apis · summary.json 을
                                      --out(기본 .appium-cli/crawl)에 (--max 는 100 장까지). --keep 이면 저장본과 같음 · 바뀜 · 새 화면
-                                     로그아웃 · 위험 글자(삭제 · 결제 …) · --exclude 에 맞는 이름은 안 누른다 (--exclude 는 여러 번)
+                                     위험 글자(삭제 · 결제 …) · --exclude 에 맞는 이름은 안 누른다 (--exclude 는 여러 번)
+                                     --login 이면 로그아웃 판 뒤 앱 데이터를 지우고 스크립트로 로그인해 로그인:<역할>(기본 일반 회원) 판을 돈다
+                                     로그아웃은 로그인 판에서 다시 로그인할 수 있을 때만 누른다 (다시 로그인은 세 번까지)
+                                     스크립트는 한 줄에 tap · fill · back · swipe 하나 (선택자는 따옴표로: fill '~Username input field' bob)
 
 디바이스 팜 (session 을 열기 전에 폰을 잡는다)
   devices                            팜의 폰과 상태
@@ -79,6 +82,25 @@ function API꼴(s: string | undefined): RegExp | undefined {
   return 식;
 }
 
+// 로그인 스크립트에 쓸 수 있는 명령 — 앱 안에서 누르고 넣는 것만 (open · close · crawl 은 session 을 바꾼다)
+const 스크립트명령 = new Set(['tap', 'click', 'fill', 'back', 'swipe']);
+
+// ref 대신 선택자(`~desc` · `id=…`)도 받는다 — 로그인 스크립트처럼 ref 번호를 모르고 쓸 때
+const 선택자인가 = (x: string | undefined): x is string => x !== undefined && /^(?:~|id=)./.test(x);
+
+/** 로그인 스크립트 — 한 줄이 `appium-cli -s=<이름>` 뒤에 쓰는 명령 하나. 따옴표로 띄어쓰기를 묶고, 빈 줄 · `#` 줄은 건너뛴다. tap · fill 은 선택자만 (ref 는 화면마다 바뀐다) */
+function 스크립트읽기(글: string): string[][] {
+  const 줄들 = 글.split(/\r?\n/).flatMap((줄, i) => {
+    const 낱 = [...줄.matchAll(/'([^']*)'|"([^"]*)"|(\S+)/g)].map((m) => m[1] ?? m[2] ?? m[3]!);
+    if (낱.length === 0 || 낱[0]!.startsWith('#')) return [];
+    if (!스크립트명령.has(낱[0]!)) throw new Error(`로그인 스크립트 ${i + 1}줄: ${낱[0]} 은 못 쓴다 — tap · fill · back · swipe 만`);
+    if (['tap', 'click', 'fill'].includes(낱[0]!) && !선택자인가(낱[1])) throw new Error(`로그인 스크립트 ${i + 1}줄: ref 대신 선택자('~desc' · 'id=…')를 쓴다`);
+    return [낱];
+  });
+  if (줄들.length === 0) throw new Error('로그인 스크립트가 비었다');
+  return 줄들;
+}
+
 async function 읽는다(파일: string): Promise<세션> {
   try {
     return JSON.parse(await readFile(파일, 'utf8')) as 세션;
@@ -103,6 +125,26 @@ function 고른다(s: 세션, ref: string | undefined): { el: 요소; loc: strin
   const loc = locatorFor(el);
   const 겹침 = loc === null ? 0 : Object.values(s.refs).filter((e) => locatorFor(e) === loc).length;
   return { el, loc, 겹침 };
+}
+
+// tap · fill 대상 — 선택자면 마지막 화면을 안 보고 그대로 쓴다
+function 대상(s: 세션, x: string | undefined): { el: 요소 | null; loc: string | null; 막힘: string | null } {
+  if (선택자인가(x)) return { el: null, loc: x, 막힘: null };
+  const { el, loc, 겹침 } = 고른다(s, x);
+  return { el, loc, 막힘: 선택자글(loc, 겹침) };
+}
+
+// 선택자로 찾는다 — 앱이 막 떴으면(로그인 스크립트 첫 줄) 뜰 때까지 다시 찾는다
+async function 찾는다(c: 연결, sid: string, loc: string): Promise<string> {
+  const 끝 = Date.now() + 가라앉기.찾기_ms;
+  for (;;) {
+    try {
+      return await 요소를찾는다(c, sid, w3c(loc).using, w3c(loc).value);
+    } catch (e) {
+      if (Date.now() >= 끝) throw new Error(`${loc} 를 지금 화면에서 못 찾았다 — ${e instanceof Error ? e.message : String(e)}`);
+      await new Promise((ok) => setTimeout(ok, 가라앉기.간격_ms));
+    }
+  }
 }
 
 // 케이스에 옮겨 쓸 수 있는 선택자만 코드로 낸다. 없거나 겹치면 까닭을 적는다 (test_platform tpx-author/references/app.md §2)
@@ -136,6 +178,8 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       exclude: { type: 'string', multiple: true },
       out: { type: 'string' },
       keep: { type: 'string' },
+      login: { type: 'string' },
+      role: { type: 'string' },
     },
   });
   const [명령, ...인자] = positionals;
@@ -250,9 +294,20 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       const 출력 = values.out ?? join(폴더, 'crawl');
       // 저장본(에이전트가 화면 기록에서 만든 kept/index.json) — 없거나 틀린 파일은 없는 것으로 (test_platform 과 같다)
       const 저장 = values.keep === undefined ? null : await readFile(values.keep, 'utf8').then((t) => 저장본모양(JSON.parse(t))).catch(() => null);
+      // 로그아웃 판을 다 돈 뒤에 죽지 않게 스크립트 · 역할을 먼저 본다
+      const 역할 = values.role ?? '일반 회원'; // test_platform `기본역할`(@platform/kit/accounts)
+      if (!상태인가(`로그인:${역할}`)) throw new Error(`--role 은 앞뒤 빈칸 없이 40자까지다: ${역할}`);
+      const 줄들 = values.login === undefined ? null : 스크립트읽기(await readFile(values.login, 'utf8'));
+      const 연결인자 = [...(values.url === undefined ? [] : ['--url', values.url]), ...(values.token === undefined ? [] : ['--token', values.token])];
+      const 로그인 = 줄들 === null ? undefined : {
+        역할,
+        돌린다: async (): Promise<void> => {
+          for (const 줄 of 줄들) await run([`-s=${이름}`, ...줄, ...연결인자], env);
+        },
+      };
       const 시작 = Date.now();
-      const r = await crawl(c, sid, { 장, 분 }, 뺄, 꼴);
-      const { 파일들, 저장본 } = 결과파일들(r, '로그아웃', 저장, new Date().toISOString().slice(0, 10));
+      const r = await crawl(c, sid, { 장, 분 }, 뺄, 꼴, 로그인);
+      const { 파일들, 저장본, 목록수 } = 결과파일들(r, 저장, new Date().toISOString().slice(0, 10));
       for (const [경로, 글] of 파일들) {
         await mkdir(dirname(join(출력, 경로)), { recursive: true });
         await writeFile(join(출력, 경로), 글);
@@ -265,8 +320,10 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       const 초 = ((Date.now() - 시작) / 1000).toFixed(1);
       const API수 = r.screens.reduce((n, x) => n + x.apis.length, 0);
       const 창수 = Object.values(r.dialogs).reduce((n, x) => n + x, 0);
+      const 판셈 = [...new Set(r.screens.map((x) => x.상태))].map((상) => `${상} ${r.screens.filter((x) => x.상태 === 상).length}장`).join(' · ');
+      const 로그인셈 = 로그인 === undefined ? '' : ` · 다시 로그인 ${r.다시로그인}번(앱 비우기 ${r.앱비우기 ?? '-'})`;
       return (
-        `크롤: 로그아웃 ${r.screens.length}장 · 연결 ${r.links.length}개 · API ${API수}개 · 누름 ${r.presses}번 · 재시작 ${r.restarts}번 · 확인 창 ${창수}번` +
+        `크롤: ${판셈} · 목록 ${목록수}장 · 연결 ${r.links.length}개 · API ${API수}개 · 누름 ${r.presses}번 · 재시작 ${r.restarts}번 · 확인 창 ${창수}번${로그인셈}` +
         ` · ${저장본} · 멈춘 까닭 ${r.stopped ?? '다 봄'} · ${초}초 · ${목록}\n${찍음}`
       );
     }
@@ -300,15 +357,14 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
   switch (명령) {
     case 'tap':
     case 'click': {
-      const { el, loc, 겹침 } = 고른다(s, 인자[0]);
-      const 막힘 = 선택자글(loc, 겹침);
+      const { el, loc, 막힘 } = 대상(s, 인자[0]);
       if (막힘 === null) {
-        const id = await 요소를찾는다(c, sid, w3c(loc!).using, w3c(loc!).value);
+        const id = await 찾는다(c, sid, loc!);
         await 부른다(c, 'POST', `/session/${sid}/element/${id}/click`, {});
         코드 = `await driver.$(${따옴표(loc!)}).click()`;
       } else {
         // 선택자로는 엉뚱한 요소가 눌릴 수 있어 그 ref 의 가운데를 누른다
-        const p = center(el.bounds);
+        const p = center(el!.bounds);
         if (p === null) throw new Error(`${인자[0]} 의 위치를 모른다`);
         await 좌표를누른다(c, sid, p.x, p.y);
         코드 = `// ${막힘} (좌표 ${p.x},${p.y} 를 눌렀다)`;
@@ -318,14 +374,13 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
     case 'fill': {
       const 값 = 인자[1];
       if (값 === undefined) throw new Error('fill 에 넣을 값이 필요하다');
-      const { el, loc, 겹침 } = 고른다(s, 인자[0]);
-      const 막힘 = 선택자글(loc, 겹침);
+      const { el, loc, 막힘 } = 대상(s, 인자[0]);
       let id: string;
       if (막힘 === null) {
-        id = await 요소를찾는다(c, sid, w3c(loc!).using, w3c(loc!).value);
+        id = await 찾는다(c, sid, loc!);
         코드 = `await driver.$(${따옴표(loc!)}).setValue(${따옴표(값)})`;
       } else {
-        const p = center(el.bounds);
+        const p = center(el!.bounds);
         if (p === null) throw new Error(`${인자[0]} 의 위치를 모른다`);
         await 좌표를누른다(c, sid, p.x, p.y);
         const v = (await 부른다(c, 'GET', `/session/${sid}/element/active`)) as Record<string, string>;
