@@ -55,7 +55,8 @@ ViewGroup id=com.shop:id/root [0,0][1080,2400] [ref=e1]
 |----|------|--------|
 | Appium 주소 | `--url` | `PLATFORM_APPIUM_URL` (없으면 `http://127.0.0.1:4723`) |
 | 팜 토큰 (인증 켬일 때 · Bearer) | `--token` | `PLATFORM_APPIUM_TOKEN` |
-| apk 경로 (Appium 이 도는 컴퓨터 기준) | `--app` | `PLATFORM_APP` |
+| 앱 — apk 경로(Appium 이 도는 컴퓨터 기준) 또는 URL(팜은 URL — 받는 쪽이 팜 PC) | `--app` | `PLATFORM_APP` |
 | 폰 지정 | `--udid` | `PLATFORM_DEVICE_UDID` |
+| 팜 폰 고르기 조건 (`os>=13,model=SM-*,tag=결제팀` — 쉼표는 AND) | `--filter` | — |
 
 상태 파일은 `.appium-cli/` 에 쌓인다(gitignore 대상).

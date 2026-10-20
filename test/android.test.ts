@@ -47,6 +47,14 @@ describe('도우미', () => {
     expect(center('')).toBeNull();
   });
 
+  it('filter 를 주면 farm:filter 로 싣는다', () => {
+    expect(capabilities('https://farm/app.apk', undefined, 'os>=13,model=SM-*')).toMatchObject({
+      'appium:app': 'https://farm/app.apk',
+      'farm:filter': 'os>=13,model=SM-*',
+    });
+    expect(capabilities('/a.apk')).not.toHaveProperty('farm:filter');
+  });
+
   it('capabilities 는 test_platform kit 과 같고 newCommandTimeout 만 늘린다', () => {
     expect(capabilities('/a.apk', 'R5CT')).toEqual({
       platformName: 'Android',

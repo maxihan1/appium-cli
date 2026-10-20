@@ -27,7 +27,7 @@ interface 세션 {
 
 export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
 
-  open [--app <apk>] [--udid <id>]   앱을 띄우고 첫 화면을 찍는다
+  open [--app <apk|URL>] [--udid <id>] [--filter <조건>]   앱을 띄우고 첫 화면을 찍는다
   snapshot [--raw]                   화면을 파일로 떨군다 (--raw 면 글을 그대로)
   find <글자> | --regex <식>           마지막 화면에서 줄을 찾는다
   tap <ref>                          누른다 (click 도 같다)
@@ -46,7 +46,8 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
 
 연결: --url 또는 PLATFORM_APPIUM_URL (없으면 http://127.0.0.1:4723)
 토큰: --token 또는 PLATFORM_APPIUM_TOKEN (팜이 인증을 켰을 때 — Bearer)
-앱:   --app 또는 PLATFORM_APP · 폰: --udid 또는 PLATFORM_DEVICE_UDID`;
+앱:   --app 또는 PLATFORM_APP (팜은 URL — 받는 쪽이 팜 PC) · 폰: --udid 또는 PLATFORM_DEVICE_UDID
+팜 폰 고르기: --filter 'os>=13,model=SM-*' (쉼표는 AND)`;
 
 const 따옴표 = (s: string): string => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
 
@@ -99,6 +100,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       regex: { type: 'boolean' },
       filename: { type: 'string' },
       minutes: { type: 'string' },
+      filter: { type: 'string' },
     },
   });
   const [명령, ...인자] = positionals;
@@ -154,7 +156,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
     const app = values.app ?? env.PLATFORM_APP;
     if (!app) throw new Error('앱을 띄우려면 --app 이나 PLATFORM_APP 이 필요하다');
     const 열림 = (await 부른다(c, 'POST', '/session', {
-      capabilities: { alwaysMatch: capabilities(app, values.udid ?? env.PLATFORM_DEVICE_UDID) },
+      capabilities: { alwaysMatch: capabilities(app, values.udid ?? env.PLATFORM_DEVICE_UDID, values.filter) },
     })) as { sessionId?: string } | undefined;
     if (열림?.sessionId === undefined) throw new Error('Appium 이 session 번호를 주지 않았다');
     const s: 세션 = { sessionId: 열림.sessionId, snapshot: null, refs: {}, width: 0, height: 0 };

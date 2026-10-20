@@ -15,7 +15,8 @@ export interface 화면 {
   height: number;
 }
 
-export function capabilities(app: string, udid?: string): Record<string, unknown> {
+// filter 는 디바이스 팜이 폰을 고르는 조건이다(`os>=13,model=SM-*` — 쉼표는 AND). 팜은 Appium 으로 넘기지 않는다
+export function capabilities(app: string, udid?: string, filter?: string): Record<string, unknown> {
   return {
     platformName: 'Android',
     'appium:automationName': 'UiAutomator2',
@@ -23,6 +24,7 @@ export function capabilities(app: string, udid?: string): Record<string, unknown
     // 기본 60초면 AI 가 다음 명령을 고르는 사이 session 이 끊긴다
     'appium:newCommandTimeout': 300,
     ...(udid ? { 'appium:udid': udid } : {}),
+    ...(filter ? { 'farm:filter': filter } : {}),
   };
 }
 

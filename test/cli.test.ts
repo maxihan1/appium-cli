@@ -72,6 +72,16 @@ describe('open', () => {
     expect(((fetchMock.mock.calls[0] as [string, RequestInit])[1].headers as Record<string, string>).Authorization).toBe('Bearer pat_cli');
   });
 
+  it('--filter · --app URL 을 그대로 싣는다', async () => {
+    await run(['-s=probe', 'close'], env);
+    fetchMock.mockClear();
+
+    await run(['-s=probe', 'open', '--app', 'https://farm/app.apk', '--filter', 'os>=13'], env);
+
+    const caps = JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string).capabilities.alwaysMatch;
+    expect(caps).toMatchObject({ 'appium:app': 'https://farm/app.apk', 'farm:filter': 'os>=13' });
+  });
+
   it('같은 이름이 열려 있으면 Appium 을 부르지 않고 던진다', async () => {
     await expect(run(['-s=probe', 'open'], env)).rejects.toThrow('이미 열려 있다');
     expect(fetchMock).not.toHaveBeenCalled();
