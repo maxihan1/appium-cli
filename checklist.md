@@ -14,3 +14,4 @@
 - [x] `npm run typecheck` · `npm run build`
 
 ## 3 · 4 → `docs/wbs.md` 로 옮겼다 (CLI-F2-01 부터)
+- [x] v0.3.1 — `mobile: startActivity` 를 `intent` 대신 `component` 로(extras 가 버려지던 것) · 테스트 · README
