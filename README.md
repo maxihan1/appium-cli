@@ -63,7 +63,7 @@ npx appium-cli apis --file .appium-cli/artifacts/<id>/logcat.txt
 
 팜이 아직 만드는 중(`ready:false`)이면 15초까지 기다린다.
 
-`app restart` · `app clear` 는 open 이 보낸 intent 인자(`--cap appium:optionalIntentArguments=…`)가 있으면 `activateApp` 대신 `mobile: startActivity`(`intent: <꾸러미>/<activity>` · 같은 extras)로 다시 띄운다 — 서버 주소를 intent 로 받아 앱 데이터에 두는 앱(데모마켓)이 clear 뒤에도 같은 서버로 간다. `crawl --login` 도 판 사이에 같은 길로 띄운다. extras 깃발(`-e` · `--es` · `--esn` · `--ez` · `--ei` · `--el` · `--ef` · `--eu`)만 옮기고, 다른 인자면 앱을 건드리기 전에 거절한다. 붙은 session 은 `--force` 가 있어야 한다.
+`app restart` · `app clear` 는 open 이 보낸 intent 인자(`--cap appium:optionalIntentArguments=…`)가 있으면 `activateApp` 대신 `mobile: startActivity`(`component: <꾸러미>/<activity>` · 같은 extras)로 다시 띄운다 — 서버 주소를 intent 로 받아 앱 데이터에 두는 앱(데모마켓)이 clear 뒤에도 같은 서버로 간다. `crawl --login` 도 판 사이에 같은 길로 띄운다. extras 깃발(`-e` · `--es` · `--esn` · `--ez` · `--ei` · `--el` · `--ef` · `--eu`)만 옮기고, 다른 인자면 앱을 건드리기 전에 거절한다. 붙은 session 은 `--force` 가 있어야 한다.
 
 로컬 Appium(팜 아님)에서 영상이 필요하면 `record` 로 찍는다. 팜은 session 마다 영상을 남기니 `artifacts` 를 쓴다.
 

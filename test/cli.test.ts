@@ -529,7 +529,7 @@ describe('app · record', () => {
 
     const out = await run(['-s=probe', 'app', 'clear'], env);
 
-    const 띄움 = { intent: 'com.shop/.MainActivity', extras: [['s', 'server', 'http://host:3002'], ['z', 'debug', 'true'], ['sn', 'none'], ['s', 'name', 'a b']] };
+    const 띄움 = { component: 'com.shop/.MainActivity', extras: [['s', 'server', 'http://host:3002'], ['z', 'debug', 'true'], ['sn', 'none'], ['s', 'name', 'a b']] };
     expect(실행들()).toEqual([
       { script: 'mobile: clearApp', args: [{ appId: 'com.shop' }] },
       { script: 'mobile: startActivity', args: [띄움] },

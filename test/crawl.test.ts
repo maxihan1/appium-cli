@@ -752,7 +752,7 @@ describe('crawl --login', () => {
 
     await run(['-s=c', 'crawl', '--login', 'login.txt', '--max', '40'], env);
 
-    const 띄움 = `mobile: startActivity ${JSON.stringify({ intent: 'com.shop/.Main', extras: [['s', 'server', 'http://172.25.28.63:3002']] })}`;
+    const 띄움 = `mobile: startActivity ${JSON.stringify({ component: 'com.shop/.Main', extras: [['s', 'server', 'http://172.25.28.63:3002']] })}`;
     const 비움 = 부름.indexOf('mobile: clearApp com.shop');
     expect(부름.slice(비움, 비움 + 2)).toEqual(['mobile: clearApp com.shop', 띄움]);
     expect(부름.filter((x) => x === 'mobile: clearApp com.shop')).toHaveLength(부름.filter((x) => x === 띄움).length);

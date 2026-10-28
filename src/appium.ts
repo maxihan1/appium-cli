@@ -179,6 +179,7 @@ const extras꼴: Record<string, string> = { '-e': 's', '--es': 's', '--esn': 'sn
  * 앱을 어떻게 다시 띄울까 — intent 인자와 activity 를 알면 `mobile: startActivity` 에 같은 extras 를 싣고, 모르면 `mobile: activateApp`.
  * 데모마켓은 intent 로 받은 서버 주소를 앱 데이터에 두어 clearApp 뒤 activateApp 하면 주소를 잃는다(F6-05 실측).
  * 앱을 비우기 전에 부른다 — 못 옮기는 인자면 앱을 건드리기 전에 던진다
+ * intent 가 아니라 component 로 넘긴다 — intent 는 am 의 맨 앞 위치 인자가 되어 뒤의 extras 깃발이 버려진다(폰 답에 has extras 없음). component 면 `-n pkg/activity` 꼴(test_platform PR #503 실측)
  * ponytail: extras 깃발(-e · --es · --esn · --ez · --ei · --el · --ef · --eu)만 옮긴다 — 배열 · 깃발(-f · --activity-*) 인자가 나오면 늘린다
  */
 export function 띄우기(꾸러미: string, 앱: 띄운앱 = {}): { script: 'mobile: startActivity' | 'mobile: activateApp'; arg: Record<string, unknown> } {
@@ -194,5 +195,5 @@ export function 띄우기(꾸러미: string, 앱: 띄운앱 = {}): { script: 'mo
     extras.push([꼴, ...낱.slice(i + 1, i + 수)]);
     i += 수;
   }
-  return { script: 'mobile: startActivity', arg: { intent: `${꾸러미}/${앱.appActivity}`, extras } };
+  return { script: 'mobile: startActivity', arg: { component: `${꾸러미}/${앱.appActivity}`, extras } };
 }
