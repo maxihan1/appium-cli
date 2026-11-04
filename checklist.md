@@ -15,3 +15,4 @@
 
 ## 3 · 4 → `docs/wbs.md` 로 옮겼다 (CLI-F2-01 부터)
 - [x] v0.3.1 — `mobile: startActivity` 를 `intent` 대신 `component` 로(extras 가 버려지던 것) · 테스트 · README
+- [x] v0.4.0 — 패키지 이름이면 `appium:appPackage` 로 열기 · `hold` 가 그 앱이 깔린 빈 폰 고르기(CLI-F7-01)

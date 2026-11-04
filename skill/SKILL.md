@@ -30,7 +30,7 @@ npx appium-cli -s=probe close                     # 끝나면 반드시 닫는�
 
 ```bash
 npx appium-cli devices                            # 폰과 상태 (IDLE 만 잡을 수 있다)
-npx appium-cli hold --minutes 30                  # 빈 폰 하나를 잡는다 (--udid 로 지정)
+npx appium-cli hold --minutes 30                  # 빈 폰 하나를 잡는다 (--udid 로 지정 · 앱이 패키지 이름이면 그 앱이 깔린 폰)
 npx appium-cli -s=probe open                      # … 위 루프 …
 npx appium-cli -s=probe close
 npx appium-cli release                            # 놓는다 — 팜이 깐 앱 · 앱 데이터를 지운다
@@ -82,7 +82,7 @@ ViewGroup id=com.shop:id/root [0,0][1080,2400] [ref=e1]
 |----|------|--------|
 | Appium 주소 | `--url` | `PLATFORM_APPIUM_URL` (없으면 `http://127.0.0.1:4723`) |
 | 팜 토큰 (인증 켬일 때 · Bearer) | `--token` | `PLATFORM_APPIUM_TOKEN` |
-| 앱 — apk 경로(Appium 이 도는 컴퓨터 기준) 또는 URL(팜은 URL — 받는 쪽이 팜 PC) | `--app` | `PLATFORM_APP` |
+| 앱 — apk 경로(Appium 이 도는 컴퓨터 기준) 또는 URL(팜은 URL — 받는 쪽이 팜 PC). 폰에 스토어로 깐 앱은 패키지 이름(`com.shop.app`) — 깔지 않고 `appium:appPackage` 로 켜고, 켤 때 앱 데이터를 지운다 | `--app` | `PLATFORM_APP` |
 | 폰 지정 | `--udid` | `PLATFORM_DEVICE_UDID` |
 | 팜 폰 고르기 조건 (`os>=13,model=SM-*,tag=결제팀` — 쉼표는 AND) | `--filter` | — |
 | capabilities 더하기 — `open` 에 여러 번, 값이 JSON 이면 JSON (`--cap appium:optionalIntentArguments='--es server http://host:3002'` · `--cap appium:autoGrantPermissions=true`) | `--cap <키=값>` | — |

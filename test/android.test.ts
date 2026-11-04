@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { capabilities, center, locatorFor, parseSource, w3c } from '../src/platform/android.js';
+import { capabilities, center, locatorFor, parseSource, w3c, 패키지이름인가 } from '../src/platform/android.js';
 
 import { 화면XML } from './fixture.js';
 
@@ -70,5 +70,18 @@ describe('도우미', () => {
       'appium:newCommandTimeout': 300,
       'appium:udid': 'R5CT',
     });
+  });
+
+  it('패키지 이름은 test_platform kit 과 같은 규칙으로 가른다 — 끝 마디가 앱 파일 확장자면 파일이다', () => {
+    for (const 값 of ['com.shop.app', 'com.other_app.v2', 'a.b']) expect(패키지이름인가(값), 값).toBe(true);
+    for (const 값 of ['demo.apk', 'demo.APKS', 'build.aab', 'game.xapk', 'bundle.zip', 'shop', '1com.shop', 'com..shop', 'com.shop.', '/apk/dev.apk', 'https://farm/app.apk', 'com.shop-app'])
+      expect(패키지이름인가(값), 값).toBe(false);
+  });
+
+  it('패키지 이름이면 app 대신 appPackage 만 싣는다', () => {
+    const caps = capabilities('com.shop.app', 'R5CT');
+    expect(caps['appium:appPackage']).toBe('com.shop.app');
+    expect(caps).not.toHaveProperty('appium:app');
+    expect(caps).not.toHaveProperty('appium:appActivity');
   });
 });

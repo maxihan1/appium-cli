@@ -24,12 +24,23 @@ export interface 화면 {
   height: number;
 }
 
+const 앱확장자 = new Set(['apk', 'apks', 'aab', 'xapk', 'zip']);
+
+/**
+ * 폰에 스토어로 깐 앱의 꾸러미 이름(`com.shop.app`)인가 — 아니면 apk 경로나 URL 이다.
+ * test_platform kit 과 같은 규칙이다(그 저장소 docs/spec/도메인/러너.md §5.2 「플레이스토어 앱 — 패키지 이름」). `demo.apk` 처럼 끝 마디가 앱 파일 확장자면 파일 이름으로 본다
+ */
+export function 패키지이름인가(app: string): boolean {
+  return /^[A-Za-z]\w*(\.[A-Za-z]\w*)+$/.test(app) && !앱확장자.has(app.slice(app.lastIndexOf('.') + 1).toLowerCase());
+}
+
 // filter 는 디바이스 팜이 폰을 고르는 조건이다(`os>=13,model=SM-*` — 쉼표는 AND). 팜은 Appium 으로 넘기지 않는다
 export function capabilities(app: string, udid?: string, filter?: string): Record<string, unknown> {
   return {
     platformName: 'Android',
     'appium:automationName': 'UiAutomator2',
-    'appium:app': app,
+    // 깔린 앱은 appActivity 를 주지 않는다 — UiAutomator2 가 실행 화면을 찾는다. noReset 도 없어 켤 때 앱 데이터를 지운다(apk 를 새로 깔 때처럼 로그아웃 상태)
+    ...(패키지이름인가(app) ? { 'appium:appPackage': app } : { 'appium:app': app }),
     // 기본 60초면 AI 가 다음 명령을 고르는 사이 session 이 끊긴다
     'appium:newCommandTimeout': 300,
     ...(udid ? { 'appium:udid': udid } : {}),

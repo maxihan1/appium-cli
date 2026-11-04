@@ -77,6 +77,11 @@ API 는 logcat 으로 본다 — QA 는 debug 빌드라 네트워크 로그가 �
 - [x] `CLI-F6-10` `app restart` · `app clear` · `record start|stop` — crawl 안에만 있는 재시작 · 데이터 지우기를 명령으로. record 는 팜이 아닌 로컬 Appium 용(팜은 F6-02)
   - 근거 commit 52eca80 · 2026-10-20 (실기기 미확인 — 팜 꺼짐)
 
+### ⑦ 스토어 앱 — 2026-11-04 (test_platform 진행판 APP-F2-03)
+**무엇** APK 없이 플레이스토어로만 깔 수 있는 앱. 팜이 그 앱을 「남길 앱」으로 지우지 않게 된 뒤(Devicefarm PR #97) CLI 가 패키지 이름으로 연다.
+- [x] `CLI-F7-01` `--app` · `PLATFORM_APP` 이 패키지 이름(`com.shop.app` — test_platform kit 과 같은 규칙)이면 `appium:app` 대신 `appium:appPackage` 로 연다(`appActivity` · `noReset` 없이). `hold` 는 `?app=<패키지>` 로 그 앱이 남는 폰을 받아 빈 폰을 고르고, 없으면 깔린 폰이 없는지 · 다 바쁜지 나눠 알린다. 테스트: capabilities · 가르기 · hold 주소 · 두 문장
+  - 근거 commit 8b95a11 · v0.4.0 · 2026-11-04 (실기기 미확인 — test_platform APP-F2-07 시험에서)
+
 ---
 
 ## 지금 안 하는 것
