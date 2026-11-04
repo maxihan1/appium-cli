@@ -9,7 +9,7 @@ import { logcat을읽는다, 가라앉기, 띄우기, 산출물을받는다, 연
 import { crawl, 본다 } from './crawl.js';
 import { 결과파일들, 상태인가, 저장본모양 } from './crawl-out.js';
 import { apiLines } from './logcat.js';
-import { capabilities, center, locatorFor, w3c, type 요소 } from './platform/android.js';
+import { capabilities, center, locatorFor, w3c, 패키지이름인가, type 요소 } from './platform/android.js';
 
 const 폴더 = '.appium-cli';
 
@@ -37,7 +37,7 @@ interface 세션 {
 
 export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
 
-  open [--app <apk|URL>] [--udid <id>] [--filter <조건>] [--cap <키=값>]   앱을 띄우고 첫 화면을 찍는다
+  open [--app <apk|URL|패키지>] [--udid <id>] [--filter <조건>] [--cap <키=값>]   앱을 띄우고 첫 화면을 찍는다
                                      --cap 은 capabilities 에 더한다 (여러 번 · 값이 JSON 이면 JSON · 기본값을 덮는다)
   attach <sessionId>                 남이 연 session(kit 케이스)에 붙어 지금 화면을 찍는다 — close 는 그 session 을 안 닫는다
                                      붙은 session 의 logs · crawl 은 --force 가 있어야 한다 (logcat 새 줄을 가로채 케이스 쪽에서 사라진다)
@@ -74,12 +74,12 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
 
 디바이스 팜 (session 을 열기 전에 폰을 잡는다)
   devices                            팜의 폰과 상태
-  hold [--udid <serial>] [--minutes 30|60|120]   폰을 잡는다 (udid 가 없으면 빈 폰 하나)
+  hold [--udid <serial>] [--minutes 30|60|120]   폰을 잡는다 (udid 가 없으면 빈 폰 하나 — 앱이 패키지 이름이면 그 앱이 깔린 빈 폰)
   release [--udid <serial>]          폰을 놓는다 — 팜이 깐 앱 · 앱 데이터를 정리한다
 
 연결: --url 또는 PLATFORM_APPIUM_URL (없으면 http://127.0.0.1:4723)
 토큰: --token 또는 PLATFORM_APPIUM_TOKEN (팜이 인증을 켰을 때 — Bearer)
-앱:   --app 또는 PLATFORM_APP (팜은 URL — 받는 쪽이 팜 PC) · 폰: --udid 또는 PLATFORM_DEVICE_UDID
+앱:   --app 또는 PLATFORM_APP (팜은 URL — 받는 쪽이 팜 PC · 폰에 스토어로 깐 앱은 패키지 이름 com.shop.app — 깔지 않고 켠다) · 폰: --udid 또는 PLATFORM_DEVICE_UDID
 팜 폰 고르기: --filter 'os>=13,model=SM-*' (쉼표는 AND)
 API 꼴: --api-pattern <식> (모임 둘: method · url — 기본은 OkHttp '--> GET https://…'). 물음표 · # 뒤는 지운다`;
 
@@ -271,8 +271,17 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
     if (![30, 60, 120].includes(분)) throw new Error('--minutes 는 30 · 60 · 120 중 하나다');
     let serial = values.udid ?? env.PLATFORM_DEVICE_UDID;
     if (!serial) {
-      const v = (await 부른다(팜, 'GET', '/api/devices?status=idle')) as { devices?: 폰[] } | null;
+      // 스토어 앱이면 놓을 때도 그 앱이 남는 폰만 — 팜 「남길 앱」(Devicefarm docs/guides/test-platform.md §11 「스토어 앱」)
+      const app = values.app ?? env.PLATFORM_APP;
+      const 꾸러미 = app !== undefined && 패키지이름인가(app) ? app : null;
+      const 앱거름 = 꾸러미 === null ? '' : `app=${encodeURIComponent(꾸러미)}&`;
+      const v = (await 부른다(팜, 'GET', `/api/devices?${앱거름}status=idle`)) as { devices?: 폰[] } | null;
       serial = v?.devices?.[0]?.serial;
+      if (!serial && 꾸러미 !== null) {
+        const 깔린 = (await 부른다(팜, 'GET', `/api/devices?app=${encodeURIComponent(꾸러미)}`)) as { devices?: 폰[] } | null;
+        if ((깔린?.devices ?? []).length === 0) throw new Error(`팜에 ${꾸러미} 이 깔린 폰이 없다 — 사람이 원격 화면에서 스토어로 깔고 「남길 앱」에 넣어야 한다`);
+        throw new Error(`${꾸러미} 이 깔린 빈 폰이 없다 — devices 로 상태를 본다`);
+      }
       if (!serial) throw new Error('잡을 수 있는 빈 폰이 없다 — devices 로 상태를 본다');
     }
     const v = (await 부른다(팜, 'POST', `/api/devices/${encodeURIComponent(serial)}/hold`, { minutes: 분 })) as { held?: { until?: number } } | null;
@@ -330,13 +339,11 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
   if (명령 === 'open') {
     const app = values.app ?? env.PLATFORM_APP;
     if (!app) throw new Error('앱을 띄우려면 --app 이나 PLATFORM_APP 이 필요하다');
-    const 더 = 캡읽기(values.cap ?? []);
-    const 열림 = (await 부른다(c, 'POST', '/session', {
-      capabilities: { alwaysMatch: { ...capabilities(app, values.udid ?? env.PLATFORM_DEVICE_UDID, values.filter), ...더 } },
-    })) as { sessionId?: string; capabilities?: Record<string, unknown> } | undefined;
+    const 보낸 = { ...capabilities(app, values.udid ?? env.PLATFORM_DEVICE_UDID, values.filter), ...캡읽기(values.cap ?? []) };
+    const 열림 = (await 부른다(c, 'POST', '/session', { capabilities: { alwaysMatch: 보낸 } })) as { sessionId?: string; capabilities?: Record<string, unknown> } | undefined;
     if (열림?.sessionId === undefined) throw new Error('Appium 이 session 번호를 주지 않았다');
     // UiAutomator2 는 apk 에서 읽은 appPackage · appActivity 를 session 답에 싣는다(접두 없이 — 있으면 appium: 도 본다). 답에 없으면 보낸 값
-    const 캡 = { ...Object.fromEntries(Object.entries(더).map(([k, v]) => [k.replace(/^appium:/, ''), v])), ...열림.capabilities };
+    const 캡 = { ...Object.fromEntries(Object.entries(보낸).map(([k, v]) => [k.replace(/^appium:/, ''), v])), ...열림.capabilities };
     const 앱 = Object.fromEntries(
       (['appPackage', 'appActivity', 'optionalIntentArguments'] as const).flatMap((k) => {
         const v = 캡[k] ?? 캡[`appium:${k}`];

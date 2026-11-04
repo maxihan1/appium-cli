@@ -204,3 +204,9 @@
 
 ## 2026-10-29 startActivity 는 component 로 (v0.3.1)
 - `띄우기()` 가 `intent: pkg/activity` 로 넘기면 driver 가 `am start-activity pkg/activity --es …` 를 만들고, am 은 위치 인자 뒤 깃발을 안 읽어 extras 가 버려졌다(폰 답에 `(has extras)` 없음). `component` 면 `-n pkg/activity --es …` 라 실린다 — test_platform 세션 16ec6bc8 · PR #503 폰 실측. 이 저장소에서 폰 확인은 안 했다.
+
+## 2026-11-04 스토어 앱 — 패키지 이름으로 열기 · 그 앱이 깔린 폰 잡기 (CLI-F7-01 · test_platform APP-F2-03 · v0.4.0)
+- **가르기는 test_platform kit 과 같은 규칙이다** — `^[A-Za-z]\w*(\.[A-Za-z]\w*)+$` 이고 끝 마디가 `apk` · `apks` · `aab` · `xapk` · `zip`(대소문자 무시)이 아니면 패키지 이름. 정본은 test_platform `docs/spec/도메인/러너.md` §5.2 「플레이스토어 앱 — 패키지 이름」이고, 저장소가 달라 코드는 따로 둔다(`src/platform/android.ts` `패키지이름인가`). `com.shop.zip` 같은 이름은 파일로 본다(명세와 같은 한계).
+- **열기는 `appium:appPackage` 하나** — `appActivity` 는 주지 않는다(UiAutomator2 가 실행 화면을 찾는다). `noReset` 도 없어 켤 때 앱 데이터를 지운다 — apk 를 새로 깔 때처럼 로그아웃 상태로 시작한다. `open` 은 이제 session 답에 없는 값을 보낸 capabilities 전체에서 채운다(앞은 `--cap` 만) — 답에 `appPackage` 가 없어도 `app restart` · `clear` 가 그 꾸러미를 쓴다.
+- **`hold` 는 `--udid` 가 없고 앱(`--app` · `PLATFORM_APP`)이 패키지 이름이면 `GET /api/devices?app=<패키지>&status=idle`** — 팜이 놓을 때 남기는 앱(처음 등록 때 있던 앱 ∪ 「남길 앱」)이 있는 폰만 걸린다(Devicefarm `docs/guides/test-platform.md` §11 「스토어 앱」 · ADR-057). 비면 `?app=` 만 한 번 더 물어 「팜에 <패키지> 이 깔린 폰이 없다」(사람이 깔고 남길 앱에 넣어야 한다)와 「<패키지> 이 깔린 빈 폰이 없다」를 가른다. `--udid` 를 주면 지금처럼 거르지 않는다. `?app=` 을 모르는 옛 팜은 빈 폰 아무거나 준다.
+- 확인 못 한 것: 팜 폰 실측(test_platform APP-F2-07 시험에서) — 팜이 `appium:appPackage` 만 받은 session 을 그대로 넘기는지 · 스토어 앱 첫 화면.

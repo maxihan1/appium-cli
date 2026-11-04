@@ -16,7 +16,7 @@ Node 22 이상. 런타임 의존성은 없다(설치할 때 `prepare` 가 TypeSc
 
 ```bash
 npx appium-cli devices                         # 디바이스 팜이면: 폰과 상태
-npx appium-cli hold --minutes 30               # 폰을 잡는다
+npx appium-cli hold --minutes 30               # 폰을 잡는다 (앱이 패키지 이름이면 그 앱이 깔린 빈 폰)
 npx appium-cli -s=probe open                   # 앱을 띄우고 첫 화면을 찍는다
 npx appium-cli -s=probe find --regex "/log ?in/i"
 npx appium-cli -s=probe tap e19                # Ran: await driver.$('~menu item log in').click()
@@ -147,7 +147,7 @@ await farmArtifacts('http://farm:4723/wd/hub', sessionId, 'out', { token });   /
 |----|------|--------|
 | Appium 주소 | `--url` | `PLATFORM_APPIUM_URL` (없으면 `http://127.0.0.1:4723`) |
 | 팜 토큰 (Bearer) | `--token` | `PLATFORM_APPIUM_TOKEN` |
-| 앱 — apk 경로 또는 URL | `--app` | `PLATFORM_APP` |
+| 앱 — apk 경로 또는 URL. 폰에 스토어로 깐 앱은 패키지 이름(`com.shop.app` — 깔지 않고 `appium:appPackage` 로 켠다) | `--app` | `PLATFORM_APP` |
 | 폰 지정 | `--udid` | `PLATFORM_DEVICE_UDID` |
 | 팜 폰 고르기 (`os>=13,model=SM-*`) | `--filter` | — |
 | API 줄 꼴 (모임 둘: method · url) | `--api-pattern` | — |

@@ -86,6 +86,23 @@ describe('open', () => {
     expect(caps).toMatchObject({ 'appium:app': 'https://farm/app.apk', 'farm:filter': 'os>=13' });
   });
 
+  it('--app 이 패키지 이름이면 깔지 않고 appPackage 로 열고, app restart 가 그 꾸러미를 쓴다', async () => {
+    await run(['-s=probe', 'close'], env);
+    fetchMock.mockClear();
+
+    await run(['-s=probe', 'open', '--app', 'com.shop.app'], env);
+
+    const caps = JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string).capabilities.alwaysMatch;
+    expect(caps['appium:appPackage']).toBe('com.shop.app');
+    expect(caps).not.toHaveProperty('appium:app');
+    expect(caps).not.toHaveProperty('appium:appActivity');
+    expect(caps).not.toHaveProperty('appium:noReset');
+
+    fetchMock.mockClear();
+    expect(await run(['-s=probe', 'app', 'restart'], env)).toMatch(/^Ran: await driver\.terminateApp\('com\.shop\.app'\)/);
+    expect(부른길()).not.toContain('GET /session/s-1/appium/device/current_package');
+  });
+
   it('--cap 은 JSON 이면 JSON 값, 아니면 글 그대로 싣고 첫 = 에서 가르고 기본값을 덮는다', async () => {
     await run(['-s=probe', 'close'], env);
     fetchMock.mockClear();
@@ -356,6 +373,33 @@ describe('디바이스 팜', () => {
       'DELETE http://farm:4723/api/devices/R3/hold',
     ]);
     expect(JSON.parse((fetchMock.mock.calls[1] as [string, RequestInit])[1].body as string)).toEqual({ minutes: 30 });
+    expect(existsSync('.appium-cli/held')).toBe(false);
+  });
+
+  it('앱이 패키지 이름이면 그 앱이 깔린 빈 폰을 고른다 — --app 이 환경값보다 앞선다', async () => {
+    await run(['hold'], { ...env, PLATFORM_APP: 'com.shop.app' });
+    await run(['hold', '--app', 'com.other_app.v2'], env);
+
+    expect(주소들()).toEqual([
+      'GET http://farm:4723/api/devices?app=com.shop.app&status=idle',
+      'POST http://farm:4723/api/devices/R3/hold',
+      'GET http://farm:4723/api/devices?app=com.other_app.v2&status=idle',
+      'POST http://farm:4723/api/devices/R3/hold',
+    ]);
+  });
+
+  it('그 앱이 깔린 폰이 없으면 · 다 바쁘면 까닭을 나눠 낸다', async () => {
+    const 앱env = { ...env, PLATFORM_APP: 'com.shop.app' };
+    fetchMock.mockResolvedValueOnce(답({ devices: [] })).mockResolvedValueOnce(답({ devices: [] }));
+    await expect(run(['hold'], 앱env)).rejects.toThrow('팜에 com.shop.app 이 깔린 폰이 없다');
+
+    fetchMock.mockResolvedValueOnce(답({ devices: [] })).mockResolvedValueOnce(답({ devices: [{ serial: 'R3', state: 'OCCUPIED' }] }));
+    await expect(run(['hold'], 앱env)).rejects.toThrow('com.shop.app 이 깔린 빈 폰이 없다');
+
+    expect(주소들().filter((x) => !x.includes('status='))).toEqual([
+      'GET http://farm:4723/api/devices?app=com.shop.app',
+      'GET http://farm:4723/api/devices?app=com.shop.app',
+    ]);
     expect(existsSync('.appium-cli/held')).toBe(false);
   });
 
