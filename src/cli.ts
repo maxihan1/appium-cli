@@ -74,7 +74,8 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
 
 디바이스 팜 (session 을 열기 전에 폰을 잡는다)
   devices                            팜의 폰과 상태
-  hold [--udid <serial>] [--minutes 30|60|120]   폰을 잡는다 (udid 가 없으면 빈 폰 하나 — 앱이 패키지 이름이면 그 앱이 깔린 빈 폰)
+  hold [--udid <serial>] [--app <패키지>] [--minutes 30|60|120]   폰을 잡는다 (udid 가 없으면 빈 폰 하나)
+                                     앱(--app · PLATFORM_APP)이 패키지 이름이면 그 앱이 깔린 빈 폰만 고른다
   release [--udid <serial>]          폰을 놓는다 — 팜이 깐 앱 · 앱 데이터를 정리한다
 
 연결: --url 또는 PLATFORM_APPIUM_URL (없으면 http://127.0.0.1:4723)
@@ -273,16 +274,19 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
     if (!serial) {
       // 스토어 앱이면 놓을 때도 그 앱이 남는 폰만 — 팜 「남길 앱」(Devicefarm docs/guides/test-platform.md §11 「스토어 앱」)
       const app = values.app ?? env.PLATFORM_APP;
+      // 깔린 폰 전부를 한 번에 받아 빈 폰을 여기서 고른다 — 「깔린 폰 없음」과 「빈 폰 없음」을 같은 답으로 가른다
       const 꾸러미 = app !== undefined && 패키지이름인가(app) ? app : null;
-      const 앱거름 = 꾸러미 === null ? '' : `app=${encodeURIComponent(꾸러미)}&`;
-      const v = (await 부른다(팜, 'GET', `/api/devices?${앱거름}status=idle`)) as { devices?: 폰[] } | null;
-      serial = v?.devices?.[0]?.serial;
-      if (!serial && 꾸러미 !== null) {
-        const 깔린 = (await 부른다(팜, 'GET', `/api/devices?app=${encodeURIComponent(꾸러미)}`)) as { devices?: 폰[] } | null;
-        if ((깔린?.devices ?? []).length === 0) throw new Error(`팜에 ${꾸러미} 이 깔린 폰이 없다 — 사람이 원격 화면에서 스토어로 깔고 「남길 앱」에 넣어야 한다`);
-        throw new Error(`${꾸러미} 이 깔린 빈 폰이 없다 — devices 로 상태를 본다`);
+      if (꾸러미 === null) {
+        const v = (await 부른다(팜, 'GET', '/api/devices?status=idle')) as { devices?: 폰[] } | null;
+        serial = v?.devices?.[0]?.serial;
+        if (!serial) throw new Error('잡을 수 있는 빈 폰이 없다 — devices 로 상태를 본다');
+      } else {
+        const v = (await 부른다(팜, 'GET', `/api/devices?app=${encodeURIComponent(꾸러미)}`)) as { devices?: 폰[] } | null;
+        const 깔린 = v?.devices ?? [];
+        if (깔린.length === 0) throw new Error(`팜에 ${꾸러미} 이 깔린 폰이 없다 — 사람이 원격 화면에서 스토어로 깔고 「남길 앱」에 넣어야 한다`);
+        serial = 깔린.find((p) => p.state === 'IDLE')?.serial;
+        if (!serial) throw new Error(`${꾸러미} 이 깔린 빈 폰이 없다 — devices 로 상태를 본다`);
       }
-      if (!serial) throw new Error('잡을 수 있는 빈 폰이 없다 — devices 로 상태를 본다');
     }
     const v = (await 부른다(팜, 'POST', `/api/devices/${encodeURIComponent(serial)}/hold`, { minutes: 분 })) as { held?: { until?: number } } | null;
     await writeFile(잡은폰, serial);
