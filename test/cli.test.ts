@@ -439,6 +439,72 @@ describe('swipe-in · drag · pinch-open · pinch-close · tap-xy', () => {
   });
 });
 
+describe('draw · exec', () => {
+  const 동작 = (): unknown[] => {
+    const [, init] = (fetchMock.mock.calls as [string, RequestInit][]).find(([u]) => u.endsWith('/actions'))!;
+    return JSON.parse(init.body as string).actions[0].actions;
+  };
+  const 첫줄 = (out: string): string => out.split('\n')[0]!;
+
+  it('draw 는 찾은 요소의 상자 안 % 자리를 누른 채 이어 긋고 kit 요소위에그리기 줄을 준다', async () => {
+    const 기본 = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) => (url.endsWith('/rect') ? 답({ x: 100, y: 200, width: 400, height: 100 }) : 기본(url, init)));
+
+    const out = await run(['-s=probe', 'draw', 'e3', '10,50', '50,0', '100,100'], env);
+    expect(동작()).toEqual([
+      { type: 'pointerMove', duration: 0, x: 140, y: 250 },
+      { type: 'pointerDown', button: 0 },
+      { type: 'pause', duration: 100 },
+      { type: 'pointerMove', duration: 200, x: 300, y: 200 },
+      { type: 'pointerMove', duration: 200, x: 499, y: 299 },
+      { type: 'pointerUp', button: 0 },
+    ]);
+    expect(첫줄(out)).toBe("Ran: await 요소위에그리기(driver, '~로그인 > 시작', [[10, 50], [50, 0], [100, 100]])");
+  });
+
+  it('draw 는 점 하나면 그 자리를 짧게 누르고, 주소 없는 ref 는 화면 글의 상자로 긋고 주석만 준다', async () => {
+    const out = await run(['-s=probe', 'draw', 'e2', '50,50'], env);
+    expect(동작()).toEqual([
+      { type: 'pointerMove', duration: 0, x: 20, y: 30 },
+      { type: 'pointerDown', button: 0 },
+      { type: 'pause', duration: 50 },
+      { type: 'pointerUp', button: 0 },
+    ]);
+    expect(첫줄(out)).toBe('Ran: // 주소 없음 — desc 도 id 도 없다. text= 로 찾지 않는다 (요소 [10,20][30,40] 안 [[50, 50]] 을 그었다)');
+  });
+
+  it('draw 는 점이 없거나 % 꼴이 아니면 긋지 않고 던진다', async () => {
+    for (const 틀림 of [[], ['10'], ['101,5'], ['--', '-1,5'], ['a,b']]) {
+      await expect(run(['-s=probe', 'draw', 'e3', ...틀림], env)).rejects.toThrow('draw ');
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('exec 는 읽기 명령만 부르고 답을 JSON 으로 준다 — 케이스에 옮길 코드는 없다', async () => {
+    const 기본 = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) => (url.endsWith('/execute/sync') ? 답({ statusBar: { height: 63 } }) : 기본(url, init)));
+
+    const out = await run(['-s=probe', 'exec', 'mobile: getSystemBars'], env);
+    expect(out).toBe('Ran: // 살펴보기 전용 — 케이스에 옮기지 않는다 (mobile: getSystemBars)\n{\n  "statusBar": {\n    "height": 63\n  }\n}');
+    await run(['-s=probe', 'exec', 'queryAppState', '{"appId":"com.shop"}'], env);
+    const 보낸 = (fetchMock.mock.calls as [string, RequestInit][]).filter(([u]) => u.endsWith('/execute/sync')).map(([, i]) => JSON.parse(i.body as string));
+    expect(보낸).toEqual([
+      { script: 'mobile: getSystemBars', args: [{}] },
+      { script: 'mobile: queryAppState', args: [{ appId: 'com.shop' }] },
+    ]);
+  });
+
+  it('exec 는 폰 셸 · 부품이 있는 명령 · 목록 밖 명령 · 객체가 아닌 인자를 부르지 않고 던진다', async () => {
+    await expect(run(['-s=probe', 'exec', 'mobile: shell', '{"command":"rm"}'], env)).rejects.toThrow('exec 는 mobile: shell 을 부르지 않는다 — 폰 셸은 열지 않는다');
+    await expect(run(['-s=probe', 'exec', 'mobile: setConnectivity'], env)).rejects.toThrow('phone network · 케이스는 폰상태에서');
+    await expect(run(['-s=probe', 'exec', 'mobile: fingerprint'], env)).rejects.toThrow('exec 는 읽기만 하는 명령만 부른다');
+    await expect(run(['-s=probe', 'exec'], env)).rejects.toThrow('받은 것: (없음)');
+    await expect(run(['-s=probe', 'exec', 'getSystemBars', '[1]'], env)).rejects.toThrow('exec 의 인자는 JSON 객체다');
+    await expect(run(['-s=probe', 'exec', 'getSystemBars', '{x'], env)).rejects.toThrow('exec 의 인자는 JSON 객체다');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
 describe('clear · press · type · clipboard', () => {
   const 보낸 = (): { script: string; args: Record<string, unknown>[] }[] =>
     (fetchMock.mock.calls as [string, RequestInit][]).filter(([u]) => u.endsWith('/execute/sync')).map(([, init]) => JSON.parse(init.body as string));

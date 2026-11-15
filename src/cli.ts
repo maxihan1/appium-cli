@@ -11,6 +11,7 @@ import { 결과파일들, 상태인가, 저장본모양 } from './crawl-out.js';
 import { 기다린다, 길게기본_ms, 길게누른다, 두번누른다, 맞추기, 밀방향인가, 방향말, 방향으로, 상자, 손동작정도, 손짓, 양의정수, 토스트를본다, 토스트줄 } from './gesture.js';
 import { 굴려찾기선택자, 먼저뜬다, 보인다, 세어본다, 셈줄, 조회한다 } from './find.js';
 import { 키인가, 폰키 } from './input.js';
+import { 긋는다, 인자를읽는다, 읽기명령을부른다, 읽기명령이름, 자리들, 점글, 점들을읽는다, 테두리상자, type 상자 as 요소상자 } from './escape.js';
 import { apiLines } from './logcat.js';
 import { 넣는다, 넣은파일인가, 본다 as 폴더를본다, 지운다, 파일종류인가 } from './file.js';
 import { 글자크기, 네트워크, 돌린다, 방향인가, 어두운화면, 위치, 폰상태, 폰시각, type 바꿈 } from './phone.js';
@@ -77,6 +78,11 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
                                      (Ran: await 요소안에서밀기(driver, '<선택자>', '위' | '아래' | '왼쪽' | '오른쪽'))
   drag <ref|선택자> <ref|선택자>        앞 요소를 눌러 뒤 요소 가운데로 끌어 놓는다 (Ran: await 끌어놓기(driver, '<어디서>', '<어디로>'))
   pinch-open | pinch-close <ref|선택자>   그 요소에서 두 손가락을 벌린다 · 오므린다 — 지도 · 사진 확대 축소 (Ran: await 벌리기 · 오므리기(driver, '<선택자>'))
+  draw <ref|선택자> <x,y> [<x,y> …]     그 요소 안 %(0~100) 자리를 누른다(점 하나) · 누른 채 이어 긋는다(점 여럿) — 서명 칸 · 패턴 잠금 · 그림판
+                                     (Ran: await 요소위에그리기(driver, '<선택자>', [[x, y], …])). 지도 핀은 확대마다 자리가 달라 쓰지 않는다
+  exec <mobile: 이름> [JSON]          읽기만 하는 Appium 명령을 부른다 — 살펴보기 전용, 케이스에 옮기지 않는다
+                                     (getCurrentActivity · getCurrentPackage · getNotifications · getSystemBars · getDisplayDensity · getAppStrings ·
+                                      isAppInstalled · queryAppState · getContexts · deviceInfo · batteryInfo). 폰 셸과 CLI 명령 · kit 부품이 있는 것은 거절한다
   tap-xy <x> <y>                     좌표를 누른다 — 눌러 보기만. 케이스에 옮길 Ran 줄을 내지 않는다(요소가 없는 자리는 케이스에서 보류다)
   back                               뒤로
   screenshot [ref|선택자] [--filename <파일>]   스크린샷 (ref · 선택자를 주면 그 요소만)
@@ -983,6 +989,26 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       코드 = `// 좌표 누르기는 케이스에 옮기지 않는다 — 요소가 없는 자리는 케이스에서 보류다 (좌표 ${x},${y} 를 눌렀다)`;
       break;
     }
+    case 'draw': {
+      // kit 요소위에그리기 와 같은 셈 — 점은 요소 안 %(0~100)라 폰 크기가 달라도 같은 자리를 긋는다
+      const 점들 = 점들을읽는다(인자.slice(1));
+      const { el, loc, 막힘 } = 대상(s, 인자[0]);
+      if (막힘 === null) {
+        const r = (await 부른다(c, 'GET', `/session/${sid}/element/${await 찾는다(c, sid, loc!)}/rect`)) as 요소상자;
+        if (!(r?.width > 0 && r.height > 0)) throw new Error(`${loc} 의 크기가 없다`);
+        await 긋는다(c, sid, 자리들(r, 점들));
+        코드 = `await 요소위에그리기(driver, ${따옴표(loc!)}, ${점글(점들)})`;
+      } else {
+        const r = 테두리상자(el!.bounds);
+        if (r === null) throw new Error(`${인자[0]} 의 위치를 모른다`);
+        await 긋는다(c, sid, 자리들(r, 점들));
+        코드 = `// ${막힘} (요소 ${el!.bounds} 안 ${점글(점들)} 을 그었다)`;
+      }
+      break;
+    }
+    case 'exec':
+      // 화면을 안 바꿔 찍지 않는다 — 읽기 명령만 받는다
+      return 읽기명령을부른다(c, sid, 읽기명령이름(인자[0]), 인자를읽는다(인자[1]));
     case 'fill':
     case 'clear': {
       // clear 는 넣지 않고 비우기만 한다 — kit 칸비우기(clearValue)와 같은 요청
@@ -1159,7 +1185,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
   }
 
   // playwright-cli 처럼 액션마다 새 화면을 찍는다 — 화면이 바뀌면 이전 ref 는 쓸 수 없다
-  const 찍음 = await 찍는다(c, s, false, 앞화면, ['tap', 'click', 'long-press', 'double-tap', 'tap-xy', 'swipe-in', 'drag', 'pinch-open', 'pinch-close'].includes(명령));
+  const 찍음 = await 찍는다(c, s, false, 앞화면, ['tap', 'click', 'long-press', 'double-tap', 'tap-xy', 'swipe-in', 'drag', 'pinch-open', 'pinch-close', 'draw'].includes(명령));
   await 적는다(파일, s);
   return `Ran: ${코드}\n${찍음}`;
 }
