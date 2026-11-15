@@ -42,6 +42,10 @@ npx appium-cli -s=probe contexts                # 웹뷰 맥락 목록 (NATIVE_A
 npx appium-cli -s=probe context WEBVIEW_com.shop   # 웹 맥락으로 — 웹 화면 줄은 [ref=wN], 선택자는 웹 케이스 순서의 WebdriverIO 꼴('[data-testid="…"]' · 'aria/이름' · 'button=글' · CSS)
 npx appium-cli -s=probe app restart            # Ran: await driver.terminateApp('…') · activateApp — 새 화면
 npx appium-cli -s=probe app clear              # Ran: mobile: clearApp — 앱 데이터를 지우고 다시 띄운다
+npx appium-cli -s=probe permission             # 시험 대상 앱이 요청한 권한마다 줌 · 안 줌
+npx appium-cli -s=probe permission grant CAMERA # 창 없이 준다(revoke 는 뺀다 — 앱이 꺼져 다시 띄운다) · Was: 앞 상태 · 되돌릴 명령 — 케이스는 권한상태에서 구간
+npx appium-cli -s=probe notifications           # Ran: await 알림창열기(driver) — 알림 창을 내리고 찍는다. 푸시는 tap, 닫기는 back
+npx appium-cli -s=probe app front               # Ran: await driver.activateApp('<꾸러미>') — 다른 앱 · 시스템 화면을 본 뒤 시험 대상 앱으로 돌아온다
 npx appium-cli -s=probe close
 npx appium-cli release                         # 놓는다 — 팜이 깐 앱 · 앱 데이터를 지운다
 ```

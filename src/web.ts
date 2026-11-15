@@ -219,5 +219,5 @@ export async function 웹이가라앉을때까지(c: 연결, sid: string, 맥락
   throw new Error(`누른 뒤 웹 화면을 못 읽었다(페이지가 넘어가는 중일 수 있다) — snapshot 을 다시 찍는다: ${까닭 instanceof Error ? 까닭.message : String(까닭)}`);
 }
 
-/** 웹 맥락에서 못 쓰는 명령 — 네이티브 화면 글 · UiAutomator2 손짓 · 키보드 · 앱 다시 띄우기를 쓴다 */
-export const 네이티브명령 = new Set(['crawl', 'long-press', 'double-tap', 'wait-any', 'scroll-to', 'toast', 'swipe', 'hide-keyboard', 'app', 'attrs', 'screen']);
+/** 웹 맥락에서 못 쓰는 명령 — 네이티브 화면 글 · UiAutomator2 손짓 · 키보드 · 앱 다시 띄우기 · 시스템 화면을 쓴다 */
+export const 네이티브명령 = new Set(['crawl', 'long-press', 'double-tap', 'wait-any', 'scroll-to', 'toast', 'swipe', 'hide-keyboard', 'app', 'attrs', 'screen', 'permission', 'notifications']);
