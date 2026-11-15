@@ -23,6 +23,10 @@ npx appium-cli -s=probe tap e19                # Ran: await driver.$('~menu item
 npx appium-cli -s=probe tap '~open menu'       # ref 대신 선택자도 된다 — 지금 화면에서 찾는다(앱이 뜨는 동안 10초까지 기다린다)
 npx appium-cli -s=probe long-press e19         # Ran: await 길게누르기(driver, '~…') — --ms 1200(기본, kit 과 같다) 만큼 길게
 npx appium-cli -s=probe double-tap '~item'     # Ran: await 두번누르기(await driver.$('~item').getElement()) — 같은 자리를 짧게 두 번
+npx appium-cli -s=probe swipe-in '~deals' left # Ran: await 요소안에서밀기(driver, '~deals', '왼쪽') — 그 요소 안에서만 민다(가로 상품 줄 · 밀어서 삭제 · 아래 시트 · 슬라이더)
+npx appium-cli -s=probe drag e7 e9             # Ran: await 끌어놓기(driver, '<어디서>', '<어디로>') — 앞 요소를 뒤 요소 가운데로 끌어 놓는다
+npx appium-cli -s=probe pinch-open '~map'      # Ran: await 벌리기(driver, '~map') — 두 손가락을 벌린다(pinch-close 는 오므리기)
+npx appium-cli -s=probe tap-xy 540 1200        # 좌표를 누른다 — 눌러 보기만, Ran 줄은 주석뿐(요소가 없는 자리는 케이스에서 보류다)
 npx appium-cli -s=probe wait '~Saved'          # Ran: await 뜰때까지(driver, '~Saved') · Waited: 420ms · 새 화면 (--gone 이면 사라질때까지 · --timeout 10000 · 못 되면 종료 코드 1)
 npx appium-cli -s=probe wait --text '저장됨'     # 글자를 가진 요소 — Ran 줄은 없다
 npx appium-cli -s=probe tap e3 && npx appium-cli -s=probe toast   # Toast: 「저장됐어요」 — 누른 바로 뒤에 부른다, 못 봤으면 종료 코드 1 (--timeout 5000)

@@ -181,7 +181,7 @@ describe('웹 맥락의 누르기 · 넣기 · 확인', () => {
   });
 
   it('네이티브 화면 글 · 손짓 · 키보드 · 앱 다시 띄우기 명령은 막는다', async () => {
-    for (const 명령 of [['swipe', 'up'], ['scroll-to', '리뷰'], ['long-press', 'w1'], ['app', 'restart'], ['crawl']]) {
+    for (const 명령 of [['swipe', 'up'], ['scroll-to', '리뷰'], ['long-press', 'w1'], ['app', 'restart'], ['crawl'], ['swipe-in', 'w1', 'left'], ['drag', 'w1', 'w2'], ['pinch-open', 'w1'], ['tap-xy', '1', '1']]) {
       await expect(run(['-s=probe', ...명령], env)).rejects.toThrow(`웹 맥락(${WEB})에서는 ${명령[0]} 을 못 쓴다`);
     }
     expect(fetchMock).not.toHaveBeenCalled();
