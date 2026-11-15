@@ -87,7 +87,7 @@ async function 읽어온다(c: 연결, sid: string): Promise<화면> {
 export async function 화면을기다린다(c: 연결, sid: string, 앞?: string, 움직임봄 = false): Promise<화면> {
   let 화면 = await 읽어온다(c, sid);
   if (앞 === undefined) return 화면;
-  // 움직임은 crawl 만 쓴다 — tap · fill 이 읽은 화면을 다 쥐고 있지 않게
+  // 움직임은 crawl 과 누르기(tap · long-press · double-tap 의 Toast 줄)만 쓴다 — fill · swipe 가 읽은 화면을 다 쥐고 있지 않게
   const 읽음 = 움직임봄 ? [화면] : [];
   let 바뀜 = 화면.글 !== 앞;
   let 돈수 = 0;

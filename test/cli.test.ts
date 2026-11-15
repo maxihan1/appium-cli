@@ -372,37 +372,38 @@ describe('long-press · double-tap · wait · toast', () => {
   beforeEach(() => {
     가라앉기.토스트더_ms = 0;
   });
+  afterEach(() => {
+    가라앉기.토스트더_ms = 300;
+  });
 
-  it('long-press 는 ref 가운데를 길게 누르고 길게누르기 코드와 새 화면을 준다 — --ms 로 길이를 바꾼다', async () => {
+  const 보낸몸 = (끝: string): { script?: string; args?: { elementId: string; duration: number }[] }[] =>
+    (fetchMock.mock.calls as [string, RequestInit][]).filter(([u]) => u.endsWith(끝)).map(([, init]) => JSON.parse(init.body as string));
+
+  it('long-press 는 선택자를 실제로 찾아 케이스와 같은 longClickGesture 로 누르고 길게누르기 코드를 준다 — --ms 는 코드에도 실린다', async () => {
     const out = await run(['-s=probe', 'long-press', 'e3'], env);
 
-    expect(부른길()).toEqual(['POST /session/s-1/actions', 'GET /session/s-1/source']);
-    expect(손가락동작()).toEqual([
-      { type: 'pointerMove', duration: 0, x: 20, y: 60 },
-      { type: 'pointerDown', button: 0 },
-      { type: 'pause', duration: 1000 },
-      { type: 'pointerUp', button: 0 },
-    ]);
+    expect(부른길().filter((p) => !p.endsWith('/source'))).toEqual(['POST /session/s-1/element', 'POST /session/s-1/execute/sync']);
+    expect(보낸몸('/execute/sync')[0]).toEqual({ script: 'mobile: longClickGesture', args: [{ elementId: 'el-9', duration: 1200 }] });
     expect(out.split('\n')[0]).toBe("Ran: await 길게누르기(driver, '~로그인 > 시작')");
     expect(out.split('\n')[1]).toMatch(/^- Snapshot: /);
 
     fetchMock.mockClear();
-    await run(['-s=probe', 'long-press', 'e3', '--ms', '2500'], env);
-    expect(손가락동작()[2]).toEqual({ type: 'pause', duration: 2500 });
+    const 긴 = await run(['-s=probe', 'long-press', '~Login button', '--ms', '2500'], env);
+    expect(보낸몸('/execute/sync')[0]?.args?.[0]?.duration).toBe(2500);
+    expect(긴.split('\n')[0]).toBe("Ran: await 길게누르기(driver, '~Login button', 2500)");
   });
 
-  it('long-press 는 선택자면 찾은 요소의 rect 가운데를 누르고, 주소 없는 ref 는 tap 처럼 좌표 주석을 준다', async () => {
-    const 기본 = fetchMock.getMockImplementation()!;
-    fetchMock.mockImplementation(async (url: string, init: RequestInit) => (url.endsWith('/rect') ? 답({ x: 100, y: 200, width: 50, height: 20 }) : 기본(url, init)));
-
-    const out = await run(['-s=probe', 'long-press', '~Login button'], env);
-
-    expect(부른길().filter((p) => !p.endsWith('/source'))).toEqual(['POST /session/s-1/element', 'GET /session/s-1/element/el-9/rect', 'POST /session/s-1/actions']);
-    expect(손가락동작()[0]).toMatchObject({ x: 125, y: 210 });
-    expect(out.split('\n')[0]).toBe("Ran: await 길게누르기(driver, '~Login button')");
-
+  it('long-press 는 주소 없는 ref 면 tap 처럼 좌표를 길게 누르고 좌표 주석을 준다', async () => {
     const 좌표 = await run(['-s=probe', 'long-press', 'e2'], env);
+
+    expect(손가락동작()).toEqual([
+      { type: 'pointerMove', duration: 0, x: 20, y: 30 },
+      { type: 'pointerDown', button: 0 },
+      { type: 'pause', duration: 1200 },
+      { type: 'pointerUp', button: 0 },
+    ]);
     expect(좌표.split('\n')[0]).toBe('Ran: // 주소 없음 — desc 도 id 도 없다. text= 로 찾지 않는다 (좌표 20,30 를 길게 눌렀다)');
+    await expect(run(['-s=probe', 'long-press', 'e3', '--ms', '60000'], env)).rejects.toThrow('--ms 은 30000 까지다');
   });
 
   it('long-press 는 못 찾는 선택자 · 없는 ref · 잘못된 --ms 에서 누르지 않고 던진다', async () => {
@@ -413,16 +414,19 @@ describe('long-press · double-tap · wait · toast', () => {
     await expect(run(['-s=probe', 'long-press', '~없는 버튼'], env)).rejects.toThrow('~없는 버튼 를 지금 화면에서 못 찾았다');
     await expect(run(['-s=probe', 'long-press', 'e99'], env)).rejects.toThrow('ref e99 가 마지막 화면에 없다');
     await expect(run(['-s=probe', 'long-press', 'e3', '--ms', '0'], env)).rejects.toThrow('--ms 은 1 이상의 정수');
-    expect(부른길().some((p) => p.endsWith('/actions'))).toBe(false);
+    expect(부른길().some((p) => p.endsWith('/actions') || p.endsWith('/execute/sync'))).toBe(false);
   });
 
-  it('double-tap 은 같은 자리를 짧게 두 번 누르고 두번누르기 코드를 준다', async () => {
+  it('double-tap 은 케이스의 두번누르기처럼 찾은 요소를 두 번 누르고, 주소 없는 ref 는 좌표를 짧게 두 번 누른다', async () => {
     const out = await run(['-s=probe', 'double-tap', 'e3'], env);
 
-    expect(손가락동작().filter((a) => a.type === 'pointerDown')).toHaveLength(2);
-    expect(손가락동작()[0]).toMatchObject({ x: 20, y: 60 });
-    expect(손가락동작().filter((a) => a.type === 'pause').every((a) => a.duration! <= 100)).toBe(true);
+    expect(부른길().filter((p) => p.endsWith('/click'))).toHaveLength(2);
     expect(out.split('\n')[0]).toBe("Ran: await 두번누르기(driver.$('~로그인 > 시작'))");
+
+    fetchMock.mockClear();
+    const 좌표 = await run(['-s=probe', 'double-tap', 'e2'], env);
+    expect(손가락동작().filter((a) => a.type === 'pointerDown')).toHaveLength(2);
+    expect(좌표.split('\n')[0]).toContain('를 두 번 눌렀다');
   });
 
   it('double-tap 은 없는 ref 에서 누르지 않고 던진다', async () => {

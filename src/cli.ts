@@ -8,7 +8,7 @@ import { parseArgs } from 'node:util';
 import { logcat을읽는다, 가라앉기, 띄우기, 산출물을받는다, 연결주소, 부른다, 요소를찾는다, 좌표를누른다, 화면을기다린다, type 띄운앱, type 연결 } from './appium.js';
 import { crawl, 본다 } from './crawl.js';
 import { 결과파일들, 상태인가, 저장본모양 } from './crawl-out.js';
-import { 가운데, 기다린다, 길게누른다, 두번누른다, 맞추기, 양의정수, 토스트를본다, 토스트줄 } from './gesture.js';
+import { 기다린다, 길게기본_ms, 길게누른다, 두번누른다, 맞추기, 양의정수, 토스트를본다, 토스트줄 } from './gesture.js';
 import { apiLines } from './logcat.js';
 import { capabilities, center, locatorFor, w3c, 패키지이름인가, type 요소 } from './platform/android.js';
 
@@ -46,7 +46,7 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
   find <글자> | --regex <식>           마지막 화면에서 줄을 찾는다
   tap <ref|선택자>                     누른다 (click 도 같다). 선택자 '~desc' · 'id=…' 는 지금 화면에서 찾는다
                                      tap · long-press · double-tap 은 누른 뒤 기다리는 동안 본 토스트를 끝에 Toast: 「글」 줄로 덧붙인다
-  long-press <ref|선택자> [--ms 1000]   요소 가운데를 길게 누른다 (Ran: await 길게누르기(driver, '<선택자>'))
+  long-press <ref|선택자> [--ms 1200]   요소를 길게 누른다 — 케이스와 같은 동작 (Ran: await 길게누르기(driver, '<선택자>'))
   double-tap <ref|선택자>              같은 자리를 짧게 두 번 (Ran: await 두번누르기(driver.$('<선택자>')))
   wait <선택자> | --text <글자> [--gone] [--timeout 10000]
                                      그 요소(--text 면 그 글자를 가진 요소)가 뜰 때까지 (--gone 이면 사라질 때까지) 화면을 되풀이해 읽는다
@@ -469,7 +469,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       const ms = await 기다린다(c, sid, 선택자 ?? `--text ${JSON.stringify(글)}`, 맞추기(선택자, 글), 사라짐, 제한);
       const 찍음 = await 찍는다(c, s, false);
       await 적는다(파일, s);
-      const 코드 = 선택자 === undefined ? '' : `Ran: await ${사라짐 ? '사라질때까지' : '뜰때까지'}(driver, ${따옴표(선택자)})\n`;
+      const 코드 = 선택자 === undefined ? '' : `Ran: await ${사라짐 ? '사라질때까지' : '뜰때까지'}(driver, ${따옴표(선택자)}${제한 === 10_000 ? '' : `, ${제한}`})\n`;
       return `${코드}Waited: ${ms}ms\n${찍음}`;
     }
     case 'toast': {
@@ -548,13 +548,29 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
     case 'long-press':
     case 'double-tap': {
       const 길게 = 명령 === 'long-press';
-      const ms = 길게 ? 양의정수(values.ms, 1000, '--ms') : 0;
+      // 기본 시간은 kit `길게누르기` 와 같다. 한 요청이 60초에 끊겨 그보다 길게는 못 누른다
+      const ms = 길게 ? 양의정수(values.ms, 길게기본_ms, '--ms') : 0;
+      if (ms > 30_000) throw new Error(`--ms 은 30000 까지다: ${ms}`);
       const { el, loc, 막힘 } = 대상(s, 인자[0]);
-      // ref 면 그 칸의 가운데, 선택자면 지금 화면에서 찾은 요소의 가운데
-      const p = el === null ? await 가운데(c, sid, await 찾는다(c, sid, loc!)) : center(el.bounds);
-      if (p === null) throw new Error(`${인자[0]} 의 위치를 모른다`);
-      await (길게 ? 길게누른다(c, sid, p.x, p.y, ms) : 두번누른다(c, sid, p.x, p.y));
-      코드 = 막힘 === null ? (길게 ? `await 길게누르기(driver, ${따옴표(loc!)})` : `await 두번누르기(driver.$(${따옴표(loc!)}))`) : `// ${막힘} (좌표 ${p.x},${p.y} 를 ${길게 ? '길게' : '두 번'} 눌렀다)`;
+      if (막힘 === null) {
+        // tap 처럼 선택자를 실제로 찾아 케이스와 같은 동작을 한다 — Ran 줄을 옮기면 같은 일이 일어나야 한다
+        const id = await 찾는다(c, sid, loc!);
+        if (길게) {
+          await 부른다(c, 'POST', `/session/${sid}/execute/sync`, { script: 'mobile: longClickGesture', args: [{ elementId: id, duration: ms }] });
+          코드 = `await 길게누르기(driver, ${따옴표(loc!)}${ms === 길게기본_ms ? '' : `, ${ms}`})`;
+        } else {
+          const 누름 = (): Promise<unknown> => 부른다(c, 'POST', `/session/${sid}/element/${id}/click`, {});
+          const 결과 = await Promise.allSettled([누름(), 누름()]);
+          const 실패 = 결과.filter((x): x is PromiseRejectedResult => x.status === 'rejected');
+          if (실패.length === 결과.length) throw 실패[0]!.reason;
+          코드 = `await 두번누르기(driver.$(${따옴표(loc!)}))`;
+        }
+      } else {
+        const p = center(el!.bounds);
+        if (p === null) throw new Error(`${인자[0]} 의 위치를 모른다`);
+        await (길게 ? 길게누른다(c, sid, p.x, p.y, ms) : 두번누른다(c, sid, p.x, p.y));
+        코드 = `// ${막힘} (좌표 ${p.x},${p.y} 를 ${길게 ? '길게' : '두 번'} 눌렀다)`;
+      }
       break;
     }
     case 'fill': {
