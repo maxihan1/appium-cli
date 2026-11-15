@@ -750,7 +750,7 @@ describe('app · record', () => {
     await 인텐트로연다('--activity-clear-top --es server http://host:3002');
 
     await expect(run(['-s=probe', 'app', 'clear'], env)).rejects.toThrow('「--activity-clear-top --es server http://host:3002」 를 mobile: startActivity extras 로 못 옮긴다');
-    await expect(run(['-s=probe', 'app', 'stop'], env)).rejects.toThrow('app 은 restart · clear 다');
+    await expect(run(['-s=probe', 'app', 'stop'], env)).rejects.toThrow('app 은 restart · clear · front 다');
     expect(실행들()).toEqual([]);
   });
 

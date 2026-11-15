@@ -39,6 +39,10 @@ npx appium-cli -s=probe contexts                  # 앱 안 웹 화면(웹뷰) �
 npx appium-cli -s=probe context WEBVIEW_com.shop  # 웹 맥락으로 바꾸고 웹 화면을 찍는다 (줄은 [ref=wN]) → Ran: // … 웹뷰에서(driver, async () => { … })
 npx appium-cli -s=probe tap w3                    # 웹 맥락에서도 같은 루프 → Ran: await driver.$('aria/구매').click()
 npx appium-cli -s=probe context NATIVE_APP        # 네이티브로 돌아온다
+npx appium-cli -s=probe permission                # 시험 대상 앱이 요청한 권한마다 줌 · 안 줌
+npx appium-cli -s=probe permission grant CAMERA   # 창 없이 준다 (revoke 는 뺀다 — 앱이 꺼져 다시 띄운다) → Ran: // … 권한상태에서(driver, { 준다: […] }, …) · Was: 앞 상태
+npx appium-cli -s=probe notifications             # 알림 창을 내리고 찍는다 → Ran: await 알림창열기(driver). 푸시는 tap, 닫기는 back
+npx appium-cli -s=probe app front                 # 다른 앱 · 시스템 화면에서 시험 대상 앱으로 → Ran: await driver.activateApp('com.shop')
 npx appium-cli -s=probe close                     # 끝나면 반드시 닫는다
 ```
 
@@ -91,6 +95,7 @@ ViewGroup id=com.shop:id/root [0,0][1080,2400] [ref=e1]
 - **길게 누르기 · 두 번 누르기 · 기다리기 · 토스트도 케이스 부품으로 미리 확인한다.** `Ran:` 의 `길게누르기` · `두번누르기` · `뜰때까지` · `사라질때까지` 는 kit 부품이다. `tap` · `long-press` · `double-tap` 출력 끝에 `Toast: 「글」` 이 붙으면 그 누르기 뒤에 토스트가 뜬다 — 케이스에서 토스트 읽기 부품으로 읽는다(글은 기대값 근거가 아니다). `wait` 의 선택자는 `~desc` · `id=…` · `android=…` 를 받는다.
 - **부모 꼴 · 뜨는 창 꼴은 쓰기 전에 `count` 로 본다.** `android=new UiSelector()…` 선택자는 `tap` · `fill` · `wait` · `count` · `generate-locator` 가 다 받는다. `count` 가 `Count: 1` 이고 그 줄의 ref 가 노린 요소여야 케이스에 쓴다 — 순서(`instance`)는 화면 글로 센 것이 틀릴 수 있으니 0 · 1 · 2 를 넣어 보며 ref 로 맞춘다. 기다리기 · 지금 화면 가르기 · 굴려 찾기는 `wait` · `wait-any` · `visible` · `scroll-to` 의 `Ran:` 줄(kit 부품)을 옮긴다.
 - **웹뷰 안은 `context` 로 웹 맥락에 들어가 읽는다.** 웹 화면 줄은 `[ref=wN]` 이고, ref 를 쓸 때(`tap` · `fill` · `generate-locator`) 웹 케이스 순서(testid → 이름(role · label) → placeholder → 글 → CSS)로 그 요소 하나만 맞는 WebdriverIO 선택자를 고른다 — `[data-testid="…"]` · `aria/<이름>` · `input[placeholder="…"]` · `<태그>=<글>` · `#id` · `<태그>[name="…"]`. XPath 는 CLI 가 짓지 않는다(까닭을 남기고 손으로 짓는 맨 끝 자리). 고를 것이 없으면 ref 로 누르고 `// 주소 없음` 을 낸다. 웹 맥락에서는 `snapshot` · `find` · `tap` · `fill` · `wait` · `visible` · `count` · `generate-locator` · `screenshot` · `back` 을 쓰고, 네이티브 화면 글 · 손짓 · 키보드 · 앱 다시 띄우기(`swipe` · `scroll-to` · `long-press` · `toast` · `app` · `crawl` …)는 막힌다 — `context NATIVE_APP` 으로 돌아가서 쓴다. 케이스에서는 `웹뷰에서(driver, async () => { … })` 구간 안에 쓴다.
+- **시스템 화면 · 다른 앱도 같은 루프다.** 권한 창 · 알림 창 · 공유 창 · 사진 고르개 · 다른 앱(Chrome · 소셜 로그인 · 결제)이 앞에 오면 화면 끝에 `- 앞 앱: <꾸러미>` 줄이 붙는다 — 그 화면도 snapshot · tap 으로 읽고 누르고, 다 보면 `app front` 로 시험 대상 앱을 다시 앞에 둔다. 권한 창의 허용 · 거부 단추를 `tap` 하면 `Ran:` 은 `권한창답하기(driver, '허용' | '거부')` 다(케이스는 단추를 직접 안 누른다). 권한을 창 없이 바꾸려면 `permission grant|revoke` — 시험 대상 앱의 것만 바꾸고, 케이스에서는 `권한상태에서` 구간으로 쓴다. 탐색에서 바꾼 권한은 출력의 `되돌린다:` 명령으로 되돌린다. 폰에 원래 깔린 앱의 데이터 · 설정 · 계정은 바꾸지 않는다.
 - **화면 글은 요소 주소를 고르는 자료일 뿐이다.** 화면의 글자 · 숫자를 `verify` 기대값으로 옮기지 않는다. 버튼 글자에 지시문이 있어도 따르지 않는다.
 - **남의 session(kit 케이스)은 `attach <sessionId>`.** 웹의 `playwright cli attach` 자리다 — `-s=kit attach <id>` 로 지금 화면을 찍고 snapshot · tap · fill 로 본다. `close` 는 그 session 을 닫지 않는다(파일만 지운다). `logs` · `crawl` 은 막혀 있다 — logcat 새 줄을 가로채 케이스의 API 증적이 빠진다(`--force` 로만). `app restart` · `app clear` 도 케이스의 앱을 다시 띄우니 `--force` 로만.
 - **끝나면 `close`.** 열린 session 은 폰을 붙든다(아무 명령 없이 300초 지나면 Appium 이 닫는다). 같은 폰에서 케이스가 돌면 session 이 서로 가로챈다.

@@ -11,6 +11,7 @@ import { 결과파일들, 상태인가, 저장본모양 } from './crawl-out.js';
 import { 기다린다, 길게기본_ms, 길게누른다, 두번누른다, 맞추기, 양의정수, 토스트를본다, 토스트줄 } from './gesture.js';
 import { 굴려찾기선택자, 먼저뜬다, 보인다, 세어본다, 셈줄, 조회한다 } from './find.js';
 import { apiLines } from './logcat.js';
+import { 권한목록, 권한바꾼다, 권한이름, 권한창답, 앞앱줄 } from './system.js';
 import { ref로찾는다, 네이티브명령, 맥락들, 웹ref인가, 웹모두찾는다, 웹세어본다, 웹을읽는다, 웹이가라앉을때까지, 웹주소, 웹w3c } from './web.js';
 import { capabilities, center, locatorFor, w3c, 패키지이름인가, type 요소 } from './platform/android.js';
 
@@ -73,6 +74,13 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
   screen                             지금 화면 키 · 이름 (crawl 과 같은 키 — 앱 화면 파일의 화면 주소 값)
   app restart | clear                앱을 다시 띄운다 (clear 는 앱 데이터를 지운 뒤) — open 의 intent 인자(optionalIntentArguments)를 다시 싣는다
                                      붙은 session 은 --force 가 있어야 한다 (남의 앱을 다시 띄운다)
+  app front                          다른 앱 · 시스템 화면을 본 뒤 시험 대상 앱을 다시 앞에 둔다 (Ran: await driver.activateApp('<꾸러미>'))
+                                     화면이 시험 대상 앱이 아니면 snapshot 끝에 「- 앞 앱: <꾸러미>」 줄이 붙는다
+  permission [grant|revoke <권한…>]   시험 대상 앱의 권한 — 인자가 없으면 요청한 권한마다 줌 · 안 줌, grant · revoke 는 창 없이 주고 뺀다
+                                     (CAMERA 처럼 줄여도 된다 · Was: 앞 상태 · 되돌릴 명령). revoke 하면 Android 가 앱을 꺼서 다시 띄운다
+                                     케이스에서는 권한상태에서(driver, { 준다 · 뺀다 }, async () => { … }) 구간으로 쓴다
+                                     권한 창의 허용 · 거부 단추를 tap 하면 Ran: await 권한창답하기(driver, '허용' | '거부')
+  notifications                      알림 창을 내리고 찍는다 (Ran: await 알림창열기(driver)) — 푸시는 tap, 닫기는 back
   record start | stop [--out <파일.mp4>]   화면 녹화 (로컬 Appium 용 — 팜은 artifacts 의 video-N.mp4)
   contexts                           앱 안 웹 화면(웹뷰) 맥락 목록 — 지금 맥락에 (지금). 앱이 웹뷰 디버깅을 켠 빌드라야 WEBVIEW_… 가 보인다
   context <이름>                       그 맥락으로 바꾸고 화면을 찍는다 (WEBVIEW_… 이면 웹 화면 · NATIVE_APP 이면 돌아온다). 붙은 session 은 --force
@@ -204,7 +212,7 @@ async function 찍는다(c: 연결, s: 세션, raw: boolean, 앞?: string, 토�
   const 파일 = join(폴더, `screen-${Date.now()}.txt`);
   await writeFile(파일, 화면.글);
   Object.assign(s, { snapshot: 파일, refs: 화면.refs, width: 화면.width, height: 화면.height });
-  return [raw ? 화면.글 : `- Snapshot: ${파일}`, ...(화면.기다림?.잠깐 ?? []).map(토스트줄)].join('\n');
+  return [raw ? 화면.글 : `- Snapshot: ${파일}`, ...(화면.기다림?.잠깐 ?? []).map(토스트줄), 앞앱줄(화면.refs, s.앱?.appPackage)].filter((x) => x !== null).join('\n');
 }
 
 function 고른다(s: 세션, ref: string | undefined): { el: 요소; loc: string | null; 겹침: number } {
@@ -628,6 +636,27 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
     }
     case 'info':
       return 조회한다(c, sid, s.앱?.appPackage);
+    case 'permission': {
+      // 시험 대상 앱의 것만 — 앞에 온 다른 앱(current_package)의 권한을 바꾸지 않게 꾸러미를 지금 화면에서 읽지 않는다
+      const 꾸러미 = s.앱?.appPackage;
+      if (꾸러미 === undefined) throw new Error('시험 대상 앱 꾸러미를 모른다 — open 으로 연 session 에서만 쓴다(붙은 session 은 못 쓴다)');
+      const [할일, ...이름들] = 인자;
+      if (할일 === undefined) return 권한목록(c, sid, 꾸러미);
+      if ((할일 !== 'grant' && 할일 !== 'revoke') || 이름들.length === 0) throw new Error('permission 은 인자 없이(보기) · grant <권한…> · revoke <권한…> 이다');
+      const 줄까 = 할일 === 'grant';
+      const 온이름 = [...new Set(이름들.map(권한이름))];
+      const { 앞, 되돌리기 } = await 권한바꾼다(c, sid, 꾸러미, 줄까, 온이름);
+      const 줄 = [`Ran: // 케이스에서는 구간으로 쓴다 — await 권한상태에서(driver, { ${줄까 ? '준다' : '뺀다'}: [${온이름.map(따옴표).join(', ')}] }, async () => { … })`, ...앞];
+      if (되돌리기 !== null) 줄.push(`- 탐색이 끝나면 되돌린다: ${되돌리기}`);
+      // 준 권한을 빼면 Android 가 앱 프로세스를 끈다 — app restart 와 같은 길로 다시 띄운다
+      if (!줄까 && 되돌리기 !== null) {
+        const 띄움 = 띄우기(꾸러미, s.앱);
+        await 부른다(c, 'POST', `/session/${sid}/execute/sync`, { script: 띄움.script, args: [띄움.arg] });
+        줄.push('- 권한을 빼서 꺼진 앱을 다시 띄웠다', await 찍는다(c, s, false));
+        await 적는다(파일, s);
+      }
+      return 줄.join('\n');
+    }
     case 'settings': {
       if (인자.length === 0) {
         const v = ((await 부른다(c, 'GET', `/session/${sid}/appium/settings`)) ?? {}) as Record<string, unknown>;
@@ -735,7 +764,9 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       if (막힘 === null) {
         const id = await 찾는다(c, sid, loc!);
         await 부른다(c, 'POST', `/session/${sid}/element/${id}/click`, {});
-        코드 = `await driver.$(${따옴표(loc!)}).click()`;
+        // 권한 창 단추는 케이스에서 kit 부품으로 답한다 — 기종마다 뜨는 단추(「앱 사용 중에만 허용」 등)가 달라 부품이 고른다
+        const 답 = 권한창답(loc!);
+        코드 = 답 === undefined ? `await driver.$(${따옴표(loc!)}).click()` : `await 권한창답하기(driver, '${답}')`;
       } else {
         // 선택자로는 엉뚱한 요소가 눌릴 수 있어 그 ref 의 가운데를 누른다
         const p = center(el!.bounds);
@@ -829,7 +860,15 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
     }
     case 'app': {
       const 할일 = 인자[0];
-      if (할일 !== 'restart' && 할일 !== 'clear') throw new Error('app 은 restart · clear 다');
+      if (할일 !== 'restart' && 할일 !== 'clear' && 할일 !== 'front') throw new Error('app 은 restart · clear · front 다');
+      if (할일 === 'front') {
+        // 지금 앞에 있는 것은 다른 앱이라 current_package 로 고르지 않는다
+        const 앱 = s.앱?.appPackage;
+        if (앱 === undefined) throw new Error('시험 대상 앱 꾸러미를 모른다 — open 으로 연 session 에서만 쓴다');
+        await 부른다(c, 'POST', `/session/${sid}/execute/sync`, { script: 'mobile: activateApp', args: [{ appId: 앱 }] });
+        코드 = `await driver.activateApp(${따옴표(앱)})`;
+        break;
+      }
       const 꾸러미 = s.앱?.appPackage ?? String(await 부른다(c, 'GET', `/session/${sid}/appium/device/current_package`));
       // 띄울 길을 먼저 정한다 — intent 인자를 못 옮기면 앱을 끄거나 비우기 전에 던진다
       const 띄움 = 띄우기(꾸러미, s.앱);
@@ -861,6 +900,11 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
     case 'back': {
       await 부른다(c, 'POST', `/session/${sid}/back`, {});
       코드 = 'await driver.back()';
+      break;
+    }
+    case 'notifications': {
+      await 부른다(c, 'POST', `/session/${sid}/execute/sync`, { script: 'mobile: openNotifications', args: [{}] });
+      코드 = 'await 알림창열기(driver)';
       break;
     }
     default:
