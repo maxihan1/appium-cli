@@ -37,7 +37,7 @@ export function 같은id줄(els: readonly 요소[]): string | null {
 /** 화면을 처음 남길 때 붙는 줄 — 계속 움직임 · 굴림 · 같은 id. 초 = 기다린 최대 시간 */
 export function 처음줄들(h: 화면, 목록: 요소 | undefined, 초: number): string[] {
   const 줄들: string[] = [];
-  if (h.기다림?.계속) 줄더하기(줄들, `# 계속 움직임: 화면 글이 ${초}초 동안 멈추지 않았다 — 기다릴 때 움직이는화면에서 를 쓴다`);
+  if (h.기다림?.계속) 줄더하기(줄들, `# 계속 움직임: 누른 뒤 기다리는 동안(최대 ${초}초) 화면 글이 멈추지 않았다 — 기다릴 때 움직이는화면에서 를 쓴다`);
   if (목록 !== undefined) 줄더하기(줄들, 굴림줄(목록));
   const 같은 = 같은id줄(Object.values(h.refs));
   if (같은 !== null) 줄더하기(줄들, 같은);
@@ -45,18 +45,17 @@ export function 처음줄들(h: 화면, 목록: 요소 | undefined, 초: number)
 }
 
 /**
- * 누른 뒤 기다리는 동안 잠깐 뜬 글 — Toast 요소의 글, 그리고 중간 읽기에는 있었는데 마지막 화면에도 앞 화면 글에도 없는 글.
- * 앞 화면 글에 이미 있던 Toast 는 지난 것이라 뺀다. 계속 움직이는 화면은 글이 읽을 때마다 달라 사라진 글을 가리지 않고 Toast 만 본다
+ * 누른 뒤 기다리는 동안 잠깐 뜬 글 — Toast 요소와 Material 스낵바(`…/snackbar_text`)의 글. 앞 화면 글에 이미 있던 것은 지난 것이라 뺀다.
+ * 중간 읽기에만 있던 글은 고르지 않는다 — 반쯤 그린 화면 · 「불러오는 중」 자리 글이 잠깐 뜸으로 잡혀 없는 기다림을 만든다
  */
-export function 잠깐뜬글(읽음: readonly 화면[], 앞글: string, 계속: boolean): string[] {
-  const 마지막 = 읽음.at(-1);
-  if (마지막 === undefined) return [];
-  const 글들 = (h: 화면): 요소[] => Object.values(h.refs).filter((e) => !e.비밀번호 && e.text.trim() !== '');
+export function 잠깐뜬글(읽음: readonly 화면[], 앞글: string): string[] {
   const 앞에있음 = (글: string): boolean => 앞글.includes(`text=${JSON.stringify(글)}`);
-  const 마지막글 = new Set(글들(마지막).map((e) => e.text));
-  const 토스트 = 읽음.flatMap((h) => 글들(h).filter((e) => e.cls === 'Toast').map((e) => e.text));
-  const 사라진 = 계속 ? [] : 읽음.slice(0, -1).flatMap((h) => 글들(h).map((e) => e.text)).filter((t) => !마지막글.has(t));
-  return [...new Set([...토스트, ...사라진].filter((t) => !앞에있음(t)).map((t) => 정리(t, 잠깐글자)))].slice(0, 잠깐상한);
+  const 뜬것 = 읽음.flatMap((h) =>
+    Object.values(h.refs)
+      .filter((e) => !e.비밀번호 && e.text.trim() !== '' && (e.cls === 'Toast' || e.id.endsWith('snackbar_text')))
+      .map((e) => e.text),
+  );
+  return [...new Set(뜬것.filter((t) => !앞에있음(t)).map((t) => 정리(t, 잠깐글자)))].slice(0, 잠깐상한);
 }
 
 /** Android 확인 창의 제목 · 본문 글(`android:id/alertTitle` · `android:id/message`) — 둘 다 없으면 null */

@@ -620,7 +620,7 @@ describe('crawl 화면 머리 줄', () => {
 
     await run(['-s=c', 'crawl'], env);
 
-    expect(파일('002.yml').slice(0, 3)).toEqual(['# app:.Main/b screen', '# 계속 움직임: 화면 글이 0.2초 동안 멈추지 않았다 — 기다릴 때 움직이는화면에서 를 쓴다', expect.stringMatching(/^화면 /)]);
+    expect(파일('002.yml').slice(0, 3)).toEqual(['# app:.Main/b screen', '# 계속 움직임: 누른 뒤 기다리는 동안(최대 0.2초) 화면 글이 멈추지 않았다 — 기다릴 때 움직이는화면에서 를 쓴다', expect.stringMatching(/^화면 /)]);
     expect(파일('001.yml').join('\n')).not.toContain('계속 움직임');
   });
 
@@ -656,7 +656,7 @@ describe('crawl 화면 머리 줄', () => {
     expect(파일('001.yml').filter((x) => x.startsWith('# 같은 id'))).toEqual(['# 같은 id: id=com.shop:id/card 4개 · id=com.shop:id/row 3개']);
   });
 
-  it('누른 뒤 기다리는 동안 뜬 Toast · 사라진 글을 누른 버튼 이름과 함께 누른 화면에 남기고 마지막 화면에 남은 글은 안 남긴다', async () => {
+  it('누른 뒤 기다리는 동안 뜬 Toast 를 누른 버튼 이름과 함께 누른 화면에 남기고, 중간에만 보인 보통 글(불러오는 중)은 안 남긴다', async () => {
     Object.assign(가라앉기, { 최대_ms: 500, 간격_ms: 1 });
     화면들 = {
       A: { 틀: { desc: 'a screen' }, 제목: 'Home', 버튼: [{ desc: 'to b' }], 길: { 'to b': 'B' } },
@@ -667,7 +667,7 @@ describe('crawl 화면 머리 줄', () => {
 
     await run(['-s=c', 'crawl'], env);
 
-    expect(파일('001.yml').filter((x) => x.startsWith('# 잠깐 뜸'))).toEqual(['# 잠깐 뜸: 「저장했습니다」 ← 버튼 「to b」', '# 잠깐 뜸: 「불러오는 중」 ← 버튼 「to b」']);
+    expect(파일('001.yml').filter((x) => x.startsWith('# 잠깐 뜸'))).toEqual(['# 잠깐 뜸: 「저장했습니다」 ← 버튼 「to b」']);
     expect(파일('002.yml').join('\n')).not.toContain('잠깐 뜸');
   });
 

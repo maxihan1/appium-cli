@@ -83,10 +83,11 @@ async function 읽어온다(c: 연결, sid: string): Promise<화면> {
  * React Native 앱은 누른 뒤 화면을 늦게 바꾼다 — 실측: 로그인 버튼 0.5초 뒤 snapshot 이 앞 화면이었다(2026-10-20 MDA).
  * 안 바뀌는 액션(같은 화면 안 누르기 · 비밀번호 입력)은 최대_ms 를 다 기다리고 마지막 화면을 쓴다
  */
-export async function 화면을기다린다(c: 연결, sid: string, 앞?: string): Promise<화면> {
+export async function 화면을기다린다(c: 연결, sid: string, 앞?: string, 움직임봄 = false): Promise<화면> {
   let 화면 = await 읽어온다(c, sid);
   if (앞 === undefined) return 화면;
-  const 읽음 = [화면];
+  // 움직임은 crawl 만 쓴다 — tap · fill 이 읽은 화면을 다 쥐고 있지 않게
+  const 읽음 = 움직임봄 ? [화면] : [];
   let 바뀜 = 화면.글 !== 앞;
   let 돈수 = 0;
   let 같았다 = false;
@@ -96,9 +97,10 @@ export async function 화면을기다린다(c: 연결, sid: string, 앞?: string
     await new Promise((r) => setTimeout(r, 가라앉기.간격_ms));
     const 다음 = await 읽어온다(c, sid);
     const 같음 = 다음.글 === 화면.글;
-    읽음.push(다음);
+    if (움직임봄) 읽음.push(다음);
     돈수++;
-    같았다 ||= 같음;
+    // 앞 화면 그대로인 읽기(RN 이 늦게 바꾸는 0.5초)끼리 같은 것은 멈춘 게 아니다 — 바뀐 뒤 같아야 멈춤이다
+    같았다 ||= 바뀜 && 같음;
     화면 = 다음;
     if (바뀜 && 같음) {
       가라앉음 = true;
@@ -107,8 +109,9 @@ export async function 화면을기다린다(c: 연결, sid: string, 앞?: string
     if (다음.글 !== 앞) 바뀜 = true;
   }
   // 읽을 때마다 달랐다 = 끝까지 움직였다. 안 바뀌는 화면은 같은 글을 두 번 봤으니 움직임이 아니다 — 읽기가 느려 세 번을 못 돌았으면 말하지 않는다
+  if (!움직임봄) return 화면;
   const 계속 = !가라앉음 && !같았다 && 돈수 >= 3;
-  const 잠깐 = 잠깐뜬글(읽음, 앞, 계속);
+  const 잠깐 = 잠깐뜬글(읽음, 앞);
   if (계속 || 잠깐.length > 0) 화면.기다림 = { 계속, 잠깐 };
   return 화면;
 }

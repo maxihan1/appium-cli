@@ -140,7 +140,7 @@ export interface 지금 {
 
 // screen 명령도 이것으로 본다 — 크롤이 남기는 키와 같은 값이어야 해서
 export async function 본다(c: 연결, sid: string, 앞?: string): Promise<지금> {
-  const 화면 = await 화면을기다린다(c, sid, 앞);
+  const 화면 = await 화면을기다린다(c, sid, 앞, true);
   const activity = String(await 부른다(c, 'GET', `/session/${sid}/appium/device/current_activity`));
   const 앱 = String(await 부른다(c, 'GET', `/session/${sid}/appium/device/current_package`));
   return { 화면, 정보: 화면을가린다(화면, activity), 앱 };
@@ -428,9 +428,10 @@ export async function crawl(
         const 창들 = await 창을닫는다(탈퇴말인가(이름), true);
         const 뒤 = 지금.정보;
         // 버튼 이름 몫으로 누른 화면(목표)에 남긴다 — 어느 버튼이 그랬는지가 케이스에 필요하다
-        const 버튼말 = `버튼 「${이름.slice(0, 60)}」`;
-        if (지금.앱 !== app) 줄더하기(목표.움직임, `# 앱 밖: ${버튼말} → ${지금.앱}`);
-        for (const 글 of 잠깐) 줄더하기(목표.움직임, `# 잠깐 뜸: 「${글}」 ← ${버튼말}`);
+        const 버튼말 = `버튼 「${이름.replace(/\s+/g, ' ').trim().slice(0, 60)}」`;
+        // 바탕 화면(launcher)으로 간 것은 앱이 꺼진 것이지 다른 앱을 연 게 아니다. 다른 앱 화면에서 본 글은 이 버튼 몫이 아니다
+        if (지금.앱 !== app && !/launcher/i.test(지금.앱)) 줄더하기(목표.움직임, `# 앱 밖: ${버튼말} → ${지금.앱.replace(/\s+/g, '')}`);
+        if (지금.앱 === app) for (const 글 of 잠깐) 줄더하기(목표.움직임, `# 잠깐 뜸: 「${글}」 ← ${버튼말}`);
         for (const 글 of 창들) 줄더하기(목표.움직임, `# 확인 창: 「${글}」 ← ${버튼말}`);
         const 간곳 = 지금.앱 === app ? 뒤.key : 목표.key;
         const 풀림 = 상태 !== '로그아웃' && !로그아웃 && 지금.앱 === app && 로그인화면인가(Object.values(지금.화면.refs));

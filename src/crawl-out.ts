@@ -126,7 +126,11 @@ export function 결과파일들(r: 크롤결과, 저장: 저장본 | null, 오�
   const API = 모으기((s) => s.apis.map((a) => [`${a.method} ${a.url}`, a]));
   // 빠진 로그아웃 화면에서 본 움직임도 같은 키의 로그인 화면에 합친다. 머리 줄은 파일 글에만 끼우고 글자 지문은 끼우기 전 record 로 쟀다
   const 움직임 = 모으기((s) => s.움직임.map((줄) => [줄, 줄]));
-  const 머리 = (s: 칸): string[] => [...(움직임.get(s)?.values() ?? s.움직임)].slice(0, 20);
+  // 합친 두 화면의 굴림 줄이 「밀면」 붙은 것과 안 붙은 것으로 갈리면 붙은 쪽 하나만 둔다
+  const 머리 = (s: 칸): string[] => {
+    const 줄들 = [...(움직임.get(s)?.values() ?? s.움직임)];
+    return 줄들.filter((x) => !줄들.includes(`${x} — 밀면 새 줄이 보인다`)).slice(0, 20);
+  };
   const 파일들 = new Map<string, string>(화면들.map((s) => [s.파일, 머리줄끼우기(s.record, 머리(s))]));
   // 화면 글은 화면 파일에 있으니 index 에는 안 싣는다
   파일들.set('index.json', JSON.stringify({ ...r, screens: 화면들.map(({ record: _, ...s }) => s) }, null, 1));
