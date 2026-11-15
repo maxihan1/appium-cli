@@ -31,13 +31,13 @@ export const 길게누른다 = (c: 연결, sid: string, x: number, y: number, ms
 // 두 번 사이를 너무 벌리면 두 번의 한 번씩으로 읽힌다 — 100ms 안쪽으로 붙인다
 export const 두번누른다 = (c: 연결, sid: string, x: number, y: number): Promise<unknown> => 손가락(c, sid, x, y, [내림, 멈춤(50), 올림, 멈춤(100), 내림, 멈춤(50), 올림]);
 
-/** `~desc` · `id=…` 선택자나 글자가 지금 화면에 있나. id 는 Compose testTag 처럼 꾸러미 없는 값도 맞춘다(UiAutomator2 가 `<pkg>:id/` 를 붙여 찾는 것과 같다) */
+/** `~desc` · `id=…` 선택자나 글자가 지금 화면에 있나. 화면 글만 보고 Appium 으로 찾지는 않는다 */
 export function 맞추기(선택자: string | undefined, 글: string | undefined): (h: 화면) => boolean {
   const 맞다 = (e: 요소): boolean => {
     if (선택자 === undefined) return !e.비밀번호 && (e.text.includes(글!) || e.desc.includes(글!));
     if (선택자.startsWith('~')) return e.desc === 선택자.slice(1);
-    const id = 선택자.slice('id='.length);
-    return e.id === id || e.id.endsWith(`:id/${id}`);
+    // 글자 그대로만 맞춘다 — 케이스는 id 자동 완성을 끄고 돌아(disableIdLocatorAutocompletion) 짧은 이름으로는 `<pkg>:id/…` 를 못 찾는다
+    return e.id === 선택자.slice('id='.length);
   };
   return (h) => Object.values(h.refs).some(맞다);
 }

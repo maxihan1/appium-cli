@@ -47,7 +47,7 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
   tap <ref|선택자>                     누른다 (click 도 같다). 선택자 '~desc' · 'id=…' 는 지금 화면에서 찾는다
                                      tap · long-press · double-tap 은 누른 뒤 기다리는 동안 본 토스트를 끝에 Toast: 「글」 줄로 덧붙인다
   long-press <ref|선택자> [--ms 1200]   요소를 길게 누른다 — 케이스와 같은 동작 (Ran: await 길게누르기(driver, '<선택자>'))
-  double-tap <ref|선택자>              같은 자리를 짧게 두 번 (Ran: await 두번누르기(driver.$('<선택자>')))
+  double-tap <ref|선택자>              같은 자리를 짧게 두 번 (Ran: await 두번누르기(await driver.$('<선택자>').getElement()))
   wait <선택자> | --text <글자> [--gone] [--timeout 10000]
                                      그 요소(--text 면 그 글자를 가진 요소)가 뜰 때까지 (--gone 이면 사라질 때까지) 화면을 되풀이해 읽는다
                                      뜨면 걸린 ms 와 새 화면 경로, 시간 안에 안 되면 까닭 한 줄과 종료 코드 1 (Ran: await 뜰때까지 · 사라질때까지(driver, '<선택자>'))
@@ -563,7 +563,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
           const 결과 = await Promise.allSettled([누름(), 누름()]);
           const 실패 = 결과.filter((x): x is PromiseRejectedResult => x.status === 'rejected');
           if (실패.length === 결과.length) throw 실패[0]!.reason;
-          코드 = `await 두번누르기(driver.$(${따옴표(loc!)}))`;
+          코드 = `await 두번누르기(await driver.$(${따옴표(loc!)}).getElement())`;
         }
       } else {
         const p = center(el!.bounds);
