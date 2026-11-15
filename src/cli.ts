@@ -12,6 +12,7 @@ import { 기다린다, 길게기본_ms, 길게누른다, 두번누른다, 맞추
 import { 굴려찾기선택자, 먼저뜬다, 보인다, 세어본다, 셈줄, 조회한다 } from './find.js';
 import { 키인가, 폰키 } from './input.js';
 import { apiLines } from './logcat.js';
+import { 글자크기, 네트워크, 돌린다, 방향인가, 어두운화면, 위치, 폰상태, 폰시각, type 바꿈 } from './phone.js';
 import { 권한목록, 권한바꾼다, 권한이름, 권한창답, 권한창알림, 앞앱줄 } from './system.js';
 import { ref로찾는다, 네이티브명령, 맥락들, 웹ref인가, 웹모두찾는다, 웹세어본다, 웹을읽는다, 웹이가라앉을때까지, 웹주소, 웹w3c } from './web.js';
 import { capabilities, center, locatorFor, w3c, 패키지이름인가, type 요소 } from './platform/android.js';
@@ -99,6 +100,15 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
   reinstall                          시험 대상 앱을 지우고 open 의 앱 파일을 다시 깐 뒤 띄운다 — 처음 깐 상태 (Ran: await 앱다시깔기(driver))
                                      패키지 이름으로 연 스토어 앱은 지우지 않는다. 붙은 session 은 --force
                                      옛 판에서 새 판으로 올리기는 케이스에서만 — 옛판에서올리기(driver, async () => { … }) 구간(옛 판은 빌드 목록의 앞 빌드)
+  phone                              폰 상태 — 화면 방향 · 와이파이 · 모바일 데이터 · 어두운 화면 · 글자 크기 · 시각
+  phone rotate landscape|portrait    화면을 돌린다
+  phone network off|on               와이파이 · 모바일 데이터를 끊는다 · 켠다 (Appium 연결은 USB 라 살아 있다)
+  phone location <위도> <경도> | reset   가짜 위치를 둔다 · 거둔다 (음수는 -- 뒤에: phone location -- -33.86 151.21)
+  phone dark on|off                  어두운 화면
+  phone font <배율>                   글자 크기 (1 이 기본 · 폰 셸이라 팜이 adb_shell 을 열어야 한다)
+                                     바꾸면 Was: 앞 상태 · 되돌릴 명령 · 새 화면. 케이스에서는 폰상태에서(driver, { … }, async () => { … }) 구간으로 쓴다
+                                     폰 언어 · 시간대는 팜 기준값이라 바꾸지 않는다. 붙은 session 은 바꾸기에 --force
+  phone time [<꼴>]                   폰 시각 — 꼴은 YYYY-MM-DD 처럼 (Ran: await 폰시각(driver))
   notifications                      알림 창을 내리고 찍는다 (Ran: await 알림창열기(driver)) — 푸시는 tap, 닫기는 back
   record start | stop [--out <파일.mp4>]   화면 녹화 (로컬 Appium 용 — 팜은 artifacts 의 video-N.mp4)
   contexts                           앱 안 웹 화면(웹뷰) 맥락 목록 — 지금 맥락에 (지금). 앱이 웹뷰 디버깅을 켠 빌드라야 WEBVIEW_… 가 보인다
@@ -485,6 +495,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
   // app front 는 붙은 session 의 꾸러미를 몰라 아래에서 따로 거절한다
   if (s.붙음 === true && 명령 === 'app' && 인자[0] !== 'front' && values.force !== true) throw new Error('붙은 session 에서 app 을 하면 케이스가 쓰는 앱을 다시 띄운다(clear 는 데이터도 지운다) — 그래도 하려면 --force');
   if (s.붙음 === true && 명령 === 'reinstall' && values.force !== true) throw new Error('붙은 session 에서 reinstall 을 하면 케이스가 쓰는 앱을 지우고 다시 깐다 — 그래도 하려면 --force');
+  if (s.붙음 === true && 명령 === 'phone' && 인자[0] !== undefined && 인자[0] !== 'time' && values.force !== true) throw new Error('붙은 session 의 폰 상태를 바꾸면 케이스가 바뀐 폰에서 돈다 — 그래도 하려면 --force');
   if (s.붙음 === true && 명령 === 'settings' && 인자.length > 0 && values.force !== true) throw new Error('붙은 session 의 설정을 바꾸면 케이스가 바뀐 설정으로 돈다 — 그래도 하려면 --force');
   if (s.붙음 === true && 명령 !== 'close') await 맥락을맞춘다(c, s);
   if (s.맥락 !== undefined && 네이티브명령.has(명령)) throw new Error(`웹 맥락(${s.맥락})에서는 ${명령} 을 못 쓴다 — context NATIVE_APP 으로 돌아가서 쓴다`);
@@ -699,6 +710,35 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
         await 적는다(파일, s);
       }
       if (실패 !== undefined) throw new Error([실패, ...줄.slice(1)].join('\n'));
+      return 줄.join('\n');
+    }
+    case 'phone': {
+      const [할일, ...값] = 인자;
+      if (할일 === undefined) return 폰상태(c, sid);
+      if (할일 === 'time') return `Ran: await 폰시각(driver${값[0] === undefined ? '' : `, ${따옴표(값[0])}`})\nTime: ${await 폰시각(c, sid, 값[0])}`;
+      let 결과: 바꿈;
+      if (할일 === 'rotate') {
+        if (!방향인가(값[0])) throw new Error('phone rotate 는 landscape · portrait 다');
+        결과 = await 돌린다(c, sid, 값[0]);
+      } else if (할일 === 'network' || 할일 === 'dark') {
+        if (값[0] !== 'on' && 값[0] !== 'off') throw new Error(`phone ${할일} 은 on · off 다`);
+        결과 = 할일 === 'network' ? await 네트워크(c, sid, 값[0] === 'on') : await 어두운화면(c, sid, 값[0] === 'on');
+      } else if (할일 === 'location') {
+        const [위도, 경도] = 값.map(Number);
+        if (값[0] === 'reset') 결과 = await 위치(c, sid, 'reset');
+        else if (값.length === 2 && Math.abs(위도!) <= 90 && Math.abs(경도!) <= 180) 결과 = await 위치(c, sid, { 위도: 위도!, 경도: 경도! });
+        else throw new Error('phone location 은 <위도> <경도>(위도 -90~90 · 경도 -180~180) · reset 이다');
+      } else if (할일 === 'font') {
+        const 배율 = Number(값[0]);
+        if (!(배율 > 0 && 배율 <= 3)) throw new Error('phone font 는 0 보다 크고 3 까지의 배율이다 — 1 이 기본');
+        결과 = await 글자크기(c, sid, 배율);
+      } else {
+        throw new Error('phone 은 인자 없이(보기) · rotate · network · location · dark · font · time 이다');
+      }
+      const 줄 = [`Ran: ${결과.Ran}`, 결과.앞];
+      if (결과.되돌리기 !== null) 줄.push(`- 탐색이 끝나면 되돌린다: ${결과.되돌리기}`);
+      줄.push(await 찍는다(c, s, false));
+      await 적는다(파일, s);
       return 줄.join('\n');
     }
     case 'settings': {
