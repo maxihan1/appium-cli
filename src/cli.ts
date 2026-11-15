@@ -12,6 +12,7 @@ import { 기다린다, 길게기본_ms, 길게누른다, 두번누른다, 맞추
 import { 굴려찾기선택자, 먼저뜬다, 보인다, 세어본다, 셈줄, 조회한다 } from './find.js';
 import { 키인가, 폰키 } from './input.js';
 import { apiLines } from './logcat.js';
+import { 넣는다, 넣은파일인가, 본다 as 폴더를본다, 지운다, 파일종류인가 } from './file.js';
 import { 글자크기, 네트워크, 돌린다, 방향인가, 어두운화면, 위치, 폰상태, 폰시각, type 바꿈 } from './phone.js';
 import { 권한목록, 권한바꾼다, 권한이름, 권한창답, 권한창알림, 앞앱줄 } from './system.js';
 import { ref로찾는다, 네이티브명령, 맥락들, 웹ref인가, 웹모두찾는다, 웹세어본다, 웹을읽는다, 웹이가라앉을때까지, 웹주소, 웹w3c } from './web.js';
@@ -109,6 +110,11 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
                                      바꾸면 Was: 앞 상태 · 되돌릴 명령 · 새 화면. 케이스에서는 폰상태에서(driver, { … }, async () => { … }) 구간으로 쓴다
                                      폰 언어 · 시간대는 팜 기준값이라 바꾸지 않는다. 붙은 session 은 바꾸기에 --force
   phone time [<꼴>]                   폰 시각 — 꼴은 YYYY-MM-DD 처럼 (Ran: await 폰시각(driver))
+  file push 사진|영상|파일 [--size <바이트>]   폰 사진첩 · 영상 · 다운로드에 qa- 이름으로 넣는다 — 고르기 화면에서 그 이름으로 고른다
+                                     (Ran: const 파일 = await 폰에파일넣기(driver, '사진') — 케이스는 finally 에서 파일.지우기())
+  file ls <폴더> [<이름>]              폴더의 파일 이름들 — 이름을 주면 있나만 (Ran: await 폰파일있나(driver, '<폴더>', '<이름>'))
+                                     앱이 받은 파일을 본다. 폴더가 없으면 빈 목록
+  file rm <경로>                      file push 로 넣은 파일(qa- 이름)만 지운다
   notifications                      알림 창을 내리고 찍는다 (Ran: await 알림창열기(driver)) — 푸시는 tap, 닫기는 back
   record start | stop [--out <파일.mp4>]   화면 녹화 (로컬 Appium 용 — 팜은 artifacts 의 video-N.mp4)
   contexts                           앱 안 웹 화면(웹뷰) 맥락 목록 — 지금 맥락에 (지금). 앱이 웹뷰 디버깅을 켠 빌드라야 WEBVIEW_… 가 보인다
@@ -359,6 +365,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       text: { type: 'string' },
       gone: { type: 'boolean' },
       timeout: { type: 'string' },
+      size: { type: 'string' },
     },
   });
   const [명령, ...인자] = positionals;
@@ -496,6 +503,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
   if (s.붙음 === true && 명령 === 'app' && 인자[0] !== 'front' && values.force !== true) throw new Error('붙은 session 에서 app 을 하면 케이스가 쓰는 앱을 다시 띄운다(clear 는 데이터도 지운다) — 그래도 하려면 --force');
   if (s.붙음 === true && 명령 === 'reinstall' && values.force !== true) throw new Error('붙은 session 에서 reinstall 을 하면 케이스가 쓰는 앱을 지우고 다시 깐다 — 그래도 하려면 --force');
   if (s.붙음 === true && 명령 === 'phone' && 인자[0] !== undefined && 인자[0] !== 'time' && values.force !== true) throw new Error('붙은 session 의 폰 상태를 바꾸면 케이스가 바뀐 폰에서 돈다 — 그래도 하려면 --force');
+  if (s.붙음 === true && 명령 === 'file' && 인자[0] !== 'ls' && values.force !== true) throw new Error('붙은 session 의 폰에 파일을 넣거나 지우면 케이스의 고르기 화면이 바뀐다 — 그래도 하려면 --force');
   if (s.붙음 === true && 명령 === 'settings' && 인자.length > 0 && values.force !== true) throw new Error('붙은 session 의 설정을 바꾸면 케이스가 바뀐 설정으로 돈다 — 그래도 하려면 --force');
   if (s.붙음 === true && 명령 !== 'close') await 맥락을맞춘다(c, s);
   if (s.맥락 !== undefined && 네이티브명령.has(명령)) throw new Error(`웹 맥락(${s.맥락})에서는 ${명령} 을 못 쓴다 — context NATIVE_APP 으로 돌아가서 쓴다`);
@@ -740,6 +748,32 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       줄.push(await 찍는다(c, s, false));
       await 적는다(파일, s);
       return 줄.join('\n');
+    }
+    case 'file': {
+      const [할일, 값, 이름] = 인자;
+      if (할일 === 'push') {
+        if (!파일종류인가(값)) throw new Error('file push 는 사진 · 영상 · 파일 이다');
+        const 크기 = values.size === undefined ? undefined : Number(values.size);
+        const 넣음 = await 넣는다(c, sid, 값, 크기);
+        return [
+          `Ran: const 파일 = await 폰에파일넣기(driver, ${따옴표(값)}${크기 === undefined ? '' : `, { 크기: ${크기} }`})`,
+          '// 케이스는 finally 에서 await 파일.지우기() — 고르기 화면에서는 파일.이름 으로 고른다',
+          `File: ${넣음.경로}`,
+          `- 탐색이 끝나면 지운다: file rm ${넣음.경로}`,
+        ].join('\n');
+      }
+      if (할일 === 'ls') {
+        if (값 === undefined || !값.startsWith('/')) throw new Error('file ls 는 폰 안 폴더의 절대 경로다 — 예: file ls /sdcard/Download');
+        const 이름들 = await 폴더를본다(c, sid, 값);
+        if (이름 !== undefined) return `Ran: await 폰파일있나(driver, ${따옴표(값)}, ${따옴표(이름)})\nExists: ${이름들.includes(이름)}`;
+        return 이름들.length === 0 ? `${값} 가 비었거나 없다` : 이름들.join('\n');
+      }
+      if (할일 === 'rm') {
+        if (값 === undefined || !넣은파일인가(값)) throw new Error('file rm 은 file push 로 넣은 파일(/sdcard/Pictures · Movies · Download 의 qa- 이름)만 지운다');
+        await 지운다(c, sid, 값);
+        return `지웠다: ${값}`;
+      }
+      throw new Error('file 은 push · ls · rm 이다');
     }
     case 'settings': {
       if (인자.length === 0) {
