@@ -59,6 +59,8 @@ npx appium-cli -s=probe permission grant CAMERA # 창 없이 준다(revoke 는 �
 npx appium-cli -s=probe phone                   # 폰 상태 — 방향 · 와이파이 · 모바일 데이터 · 어두운 화면 · 글자 크기 · 시각
 npx appium-cli -s=probe phone network off       # 와이파이 · 데이터를 끊는다(rotate landscape · location 37.56 126.97 · dark on · font 1.3 도) · Was: 앞 상태 · 되돌릴 명령 — 케이스는 폰상태에서 구간
 npx appium-cli -s=probe phone time YYYY-MM-DD   # Ran: await 폰시각(driver, 'YYYY-MM-DD') · Time: 폰 시간대의 오늘
+npx appium-cli -s=probe file push 사진           # 사진첩에 qa- 이름으로 넣는다(영상 · 파일 · --size <바이트> 도) · Ran: const 파일 = await 폰에파일넣기(driver, '사진')
+npx appium-cli -s=probe file ls /sdcard/Download receipt.pdf   # 앱이 받은 파일이 있나 · Ran: await 폰파일있나(driver, '/sdcard/Download', 'receipt.pdf')
 npx appium-cli -s=probe notifications           # Ran: await 알림창열기(driver) — 알림 창을 내리고 찍는다. 푸시는 tap, 닫기는 back
 npx appium-cli -s=probe app front               # Ran: await driver.activateApp('<꾸러미>') — 다른 앱 · 시스템 화면을 본 뒤 시험 대상 앱으로 돌아온다
 npx appium-cli -s=probe close
