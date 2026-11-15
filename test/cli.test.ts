@@ -99,7 +99,7 @@ describe('open', () => {
     expect(caps).not.toHaveProperty('appium:noReset');
 
     fetchMock.mockClear();
-    expect(await run(['-s=probe', 'app', 'restart'], env)).toMatch(/^Ran: await driver\.terminateApp\('com\.shop\.app'\)/);
+    expect(await run(['-s=probe', 'app', 'restart'], env)).toMatch(/^Ran: await 앱다시켜기\(driver, 'com\.shop\.app'\)/);
     expect(부른길()).not.toContain('GET /session/s-1/appium/device/current_package');
   });
 
@@ -841,6 +841,66 @@ describe('attach', () => {
   });
 });
 
+describe('background · deeplink · screen-off-on · reinstall', () => {
+  const 보낸 = (): { script: string; args: Record<string, unknown>[] }[] =>
+    (fetchMock.mock.calls as [string, RequestInit][]).filter(([u]) => u.endsWith('/execute/sync')).map(([, init]) => JSON.parse(init.body as string));
+  const 첫줄 = (out: string): string => out.split('\n')[0]!;
+  async function 꾸러미로연다(app?: string): Promise<void> {
+    await run(['-s=probe', 'close'], env);
+    fetchMock.mockResolvedValueOnce(답({ sessionId: 's-2', capabilities: { appPackage: 'com.shop' } }));
+    await run(['-s=probe', 'open', ...(app === undefined ? [] : ['--app', app])], env);
+    fetchMock.mockClear();
+  }
+
+  it('background 는 backgroundApp 에 초를 싣고 뒤로보냈다오기 코드와 새 화면을 준다 — 1~600 초가 아니면 보내지 않는다', async () => {
+    const out = await run(['-s=probe', 'background', '5'], env);
+    expect(보낸()).toEqual([{ script: 'mobile: backgroundApp', args: [{ seconds: 5 }] }]);
+    expect(첫줄(out)).toBe('Ran: await 뒤로보냈다오기(driver, 5)');
+    expect(out).toMatch(/\n- Snapshot: /);
+    fetchMock.mockClear();
+    for (const 틀림 of [[], ['0'], ['1.5'], ['601'], ['abc']]) await expect(run(['-s=probe', 'background', ...틀림], env)).rejects.toThrow('background 는 1~600 초다');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('deeplink 는 시험 대상 앱 꾸러미를 실어 deepLink 를 보내고 딥링크열기 코드를 준다 — 주소가 아니면 보내지 않는다', async () => {
+    await 꾸러미로연다();
+    const out = await run(['-s=probe', 'deeplink', "shop://product/7?ref='a'"], env);
+    expect(보낸()).toEqual([{ script: 'mobile: deepLink', args: [{ url: "shop://product/7?ref='a'", package: 'com.shop' }] }]);
+    expect(첫줄(out)).toBe("Ran: await 딥링크열기(driver, 'shop://product/7?ref=\\'a\\'')");
+    fetchMock.mockClear();
+    for (const 틀림 of [[], ['product/7']]) await expect(run(['-s=probe', 'deeplink', ...틀림], env)).rejects.toThrow('deeplink 에 주소');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('screen-off-on 은 lock 뒤 unlock 을 보내고 화면껐다켜기 코드를 준다', async () => {
+    expect(첫줄(await run(['-s=probe', 'screen-off-on'], env))).toBe('Ran: await 화면껐다켜기(driver)');
+    expect(보낸().map((x) => x.script)).toEqual(['mobile: lock', 'mobile: unlock']);
+  });
+
+  it('reinstall 은 시험 대상 앱을 지우고 open 의 앱 파일을 깐 뒤 띄우고 앱다시깔기 코드를 준다', async () => {
+    await 꾸러미로연다();
+    expect(첫줄(await run(['-s=probe', 'reinstall'], env))).toBe('Ran: await 앱다시깔기(driver)');
+    expect(보낸()).toEqual([
+      { script: 'mobile: removeApp', args: [{ appId: 'com.shop' }] },
+      { script: 'mobile: installApp', args: [{ appPath: '/apk/dev.apk' }] },
+      { script: 'mobile: activateApp', args: [{ appId: 'com.shop' }] },
+    ]);
+  });
+
+  it('reinstall 은 패키지 이름으로 연 스토어 앱 · 꾸러미를 모르는 session 에서 지우지 않고 던진다 · 붙은 session 은 --force', async () => {
+    await 꾸러미로연다('com.shop');
+    await expect(run(['-s=probe', 'reinstall'], env)).rejects.toThrow('패키지 이름으로 연 스토어 앱은 지우지 않는다');
+    await expect(run(['-s=probe', 'background', '3'], env)).resolves.toMatch(/^Ran: /);
+    fetchMock.mockClear();
+    await run(['-s=kit', 'attach', 'kit-7'], env);
+    fetchMock.mockClear();
+    await expect(run(['-s=kit', 'reinstall'], env)).rejects.toThrow('케이스가 쓰는 앱을 지우고 다시 깐다');
+    expect(fetchMock).not.toHaveBeenCalled();
+    await expect(run(['-s=kit', 'reinstall', '--force'], env)).rejects.toThrow('시험 대상 앱 꾸러미를 모른다');
+    expect(보낸()).toEqual([]);
+  });
+});
+
 describe('app · record', () => {
   const 실행들 = (): unknown[] =>
     (fetchMock.mock.calls as [string, RequestInit][]).filter(([u]) => u.endsWith('/execute/sync')).map(([, i]) => JSON.parse(i.body as string) as unknown);
@@ -855,6 +915,7 @@ describe('app · record', () => {
   it('app clear 는 앱 데이터를 지운 뒤 open 의 intent 인자를 mobile: startActivity extras 로 다시 싣고 새 화면을 찍는다', async () => {
     await 인텐트로연다("--es server http://host:3002 --ez debug true --esn none --es name 'a b'");
     expect(JSON.parse(readFileSync('.appium-cli/probe.json', 'utf8')).앱).toEqual({
+      app: '/apk/dev.apk',
       appPackage: 'com.shop',
       appActivity: '.MainActivity',
       optionalIntentArguments: "--es server http://host:3002 --ez debug true --esn none --es name 'a b'",
@@ -888,7 +949,35 @@ describe('app · record', () => {
       { script: 'mobile: terminateApp', args: [{ appId: 'com.shop' }] },
       { script: 'mobile: activateApp', args: [{ appId: 'com.shop' }] },
     ]);
-    expect(out.split('\n').slice(0, 2)).toEqual(["Ran: await driver.terminateApp('com.shop')", "Ran: await driver.activateApp('com.shop')"]);
+    expect(out.split('\n')[0]).toBe("Ran: await 앱다시켜기(driver, 'com.shop')");
+    expect(out.split('\n')[1]).toMatch(/^- Snapshot: /);
+  });
+
+  it('intent 인자가 글뿐이면 restart 는 인자로켜기, clear 는 앱비우기 에 { 이름: 값 } 을 싣는다 — 인자가 없으면 앱비우기(driver)', async () => {
+    await 인텐트로연다("--es server http://host:3002 --es 'user-id' 7");
+    const 띄움 = { component: 'com.shop/.MainActivity', extras: [['s', 'server', 'http://host:3002'], ['s', 'user-id', '7']] };
+
+    expect((await run(['-s=probe', 'app', 'restart'], env)).split('\n')[0]).toBe("Ran: await 인자로켜기(driver, { server: 'http://host:3002', 'user-id': '7' })");
+    expect(실행들()).toEqual([
+      { script: 'mobile: terminateApp', args: [{ appId: 'com.shop' }] },
+      { script: 'mobile: startActivity', args: [띄움] },
+    ]);
+    fetchMock.mockClear();
+    expect((await run(['-s=probe', 'app', 'clear'], env)).split('\n')[0]).toBe("Ran: await 앱비우기(driver, { server: 'http://host:3002', 'user-id': '7' })");
+    expect(실행들()).toEqual([
+      { script: 'mobile: clearApp', args: [{ appId: 'com.shop' }] },
+      { script: 'mobile: startActivity', args: [띄움] },
+    ]);
+
+    await run(['-s=probe', 'close'], env);
+    fetchMock.mockResolvedValueOnce(답({ sessionId: 's-3', capabilities: { appPackage: 'com.shop' } }));
+    await run(['-s=probe', 'open'], env);
+    fetchMock.mockClear();
+    expect((await run(['-s=probe', 'app', 'clear'], env)).split('\n')[0]).toBe('Ran: await 앱비우기(driver)');
+    expect(실행들()).toEqual([
+      { script: 'mobile: clearApp', args: [{ appId: 'com.shop' }] },
+      { script: 'mobile: activateApp', args: [{ appId: 'com.shop' }] },
+    ]);
   });
 
   it('못 옮기는 intent 인자 · 모르는 하위 명령은 앱을 건드리기 전에 던진다', async () => {

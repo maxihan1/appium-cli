@@ -194,6 +194,8 @@ export async function 산출물을받는다(c: 연결, sid: string, 폴더: stri
 
 // open 이 띄운 앱 — session 답(없으면 보낸 capabilities)에서 읽는다. 앱을 비운 뒤 같은 intent 인자로 다시 띄우는 데 쓴다
 export interface 띄운앱 {
+  // open 이 깐 앱 파일 · 주소 — reinstall 이 다시 깐다. 패키지 이름으로 연 스토어 앱은 없다(지우지 않는다)
+  app?: string;
   appPackage?: string;
   appActivity?: string;
   optionalIntentArguments?: string;

@@ -31,6 +31,10 @@ npx appium-cli -s=probe clear '~search'       # Ran: await 칸비우기(await dr
 npx appium-cli -s=probe press home             # Ran: await 키누르기(driver, '홈') — recent · delete · tab · paste 도
 npx appium-cli -s=probe type 123456            # Ran: await 포커스칸에치기(driver, '123456') — 포커스 칸에 키를 하나씩(인증번호 여섯 칸)
 npx appium-cli -s=probe clipboard write A1     # Ran: await 클립보드쓰기(driver, 'A1') — 인자 없이 부르면 읽는다(클립보드읽기)
+npx appium-cli -s=probe background 5           # Ran: await 뒤로보냈다오기(driver, 5) — 앱을 5초 뒤로 보냈다 돌아온다
+npx appium-cli -s=probe deeplink shop://item/7 # Ran: await 딥링크열기(driver, 'shop://item/7') — 시험 대상 앱으로 그 화면을 연다
+npx appium-cli -s=probe screen-off-on          # Ran: await 화면껐다켜기(driver) — 화면을 껐다 켠다(잠금 · 풀기)
+npx appium-cli -s=probe reinstall              # Ran: await 앱다시깔기(driver) — 시험 대상 앱을 지우고 다시 깐다(스토어 앱은 안 지운다)
 npx appium-cli -s=probe wait '~Saved'          # Ran: await 뜰때까지(driver, '~Saved') · Waited: 420ms · 새 화면 (--gone 이면 사라질때까지 · --timeout 10000 · 못 되면 종료 코드 1)
 npx appium-cli -s=probe wait --text '저장됨'     # 글자를 가진 요소 — Ran 줄은 없다
 npx appium-cli -s=probe tap e3 && npx appium-cli -s=probe toast   # Toast: 「저장됐어요」 — 누른 바로 뒤에 부른다, 못 봤으면 종료 코드 1 (--timeout 5000)
@@ -48,8 +52,8 @@ npx appium-cli -s=probe hide-keyboard          # 키보드가 아래 버튼을 �
 npx appium-cli -s=probe generate-locator e17   # driver.$('~Login button')
 npx appium-cli -s=probe contexts                # 웹뷰 맥락 목록 (NATIVE_APP · WEBVIEW_<꾸러미>) — 웹뷰 디버깅을 켠 빌드라야 보인다
 npx appium-cli -s=probe context WEBVIEW_com.shop   # 웹 맥락으로 — 웹 화면 줄은 [ref=wN], 선택자는 웹 케이스 순서의 WebdriverIO 꼴('[data-testid="…"]' · 'aria/이름' · 'button=글' · CSS)
-npx appium-cli -s=probe app restart            # Ran: await driver.terminateApp('…') · activateApp — 새 화면
-npx appium-cli -s=probe app clear              # Ran: mobile: clearApp — 앱 데이터를 지우고 다시 띄운다
+npx appium-cli -s=probe app restart            # Ran: await 앱다시켜기(driver, '…') — intent 인자가 있으면 인자로켜기(driver, { … }) · 새 화면
+npx appium-cli -s=probe app clear              # Ran: await 앱비우기(driver) — 앱 데이터를 지우고 다시 띄운다
 npx appium-cli -s=probe permission             # 시험 대상 앱이 요청한 권한마다 줌 · 안 줌
 npx appium-cli -s=probe permission grant CAMERA # 창 없이 준다(revoke 는 뺀다 — 앱이 꺼져 다시 띄운다) · Was: 앞 상태 · 되돌릴 명령 — 케이스는 권한상태에서 구간
 npx appium-cli -s=probe notifications           # Ran: await 알림창열기(driver) — 알림 창을 내리고 찍는다. 푸시는 tap, 닫기는 back
@@ -92,7 +96,7 @@ npx appium-cli apis --file .appium-cli/artifacts/<id>/logcat.txt
 
 팜이 아직 만드는 중(`ready:false`)이면 15초까지 기다린다.
 
-`app restart` · `app clear` 는 open 이 보낸 intent 인자(`--cap appium:optionalIntentArguments=…`)가 있으면 `activateApp` 대신 `mobile: startActivity`(`component: <꾸러미>/<activity>` · 같은 extras)로 다시 띄운다 — 서버 주소를 intent 로 받아 앱 데이터에 두는 앱(데모마켓)이 clear 뒤에도 같은 서버로 간다. `crawl --login` 도 판 사이에 같은 길로 띄운다. extras 깃발(`-e` · `--es` · `--esn` · `--ez` · `--ei` · `--el` · `--ef` · `--eu`)만 옮기고, 다른 인자면 앱을 건드리기 전에 거절한다. 붙은 session 은 `--force` 가 있어야 한다.
+`app restart` · `app clear` 는 open 이 보낸 intent 인자(`--cap appium:optionalIntentArguments=…`)가 있으면 `activateApp` 대신 `mobile: startActivity`(`component: <꾸러미>/<activity>` · 같은 extras)로 다시 띄운다 — 서버 주소를 intent 로 받아 앱 데이터에 두는 앱(데모마켓)이 clear 뒤에도 같은 서버로 간다. `crawl --login` 도 판 사이에 같은 길로 띄운다. extras 깃발(`-e` · `--es` · `--esn` · `--ez` · `--ei` · `--el` · `--ef` · `--eu`)만 옮기고, 다른 인자면 앱을 건드리기 전에 거절한다. `Ran:` 은 글 인자(`-e` · `--es`)뿐이면 kit 부품 `인자로켜기` · `앱비우기` 에 `{ 이름: '값' }` 을 싣고, 다른 꼴이 끼면 같은 요청을 직접 부르는 줄(`mobile: clearApp` · `mobile: startActivity`)이다. 붙은 session 은 `--force` 가 있어야 한다.
 
 로컬 Appium(팜 아님)에서 영상이 필요하면 `record` 로 찍는다. 팜은 session 마다 영상을 남기니 `artifacts` 를 쓴다.
 
