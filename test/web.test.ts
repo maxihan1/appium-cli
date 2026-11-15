@@ -140,6 +140,11 @@ describe('웹 맥락의 누르기 · 넣기 · 확인', () => {
     await expect(run(['-s=probe', 'fill', 'w1', '쿠폰', '--submit'], env)).rejects.toThrow('--submit 을 못 쓴다');
   });
 
+  it('clear 는 웹 칸을 비우기만 하고 칸비우기 코드를 준다', async () => {
+    expect((await run(['-s=probe', 'clear', 'w1'], env)).split('\n')[0]).toBe(`Ran: await 칸비우기(await driver.$('[data-testid="buy"]').getElement())`);
+    expect(부른길().filter((x) => x.includes('/element/el-1/'))).toEqual(['POST /session/s-1/element/el-1/clear']);
+  });
+
   it('count 는 맞은 요소마다 웹 화면이 단 ref 를 읽는다 · generate-locator ref 는 고른 선택자나 까닭', async () => {
     찾은 = [요소('el-1'), 요소('el-9')];
     expect((await run(['-s=probe', 'count', 'aria/구매'], env)).split('\n').slice(0, 3)).toEqual(['Count: 2 — 겹친다. 하나만 맞아야 케이스에 쓴다', '- w1', '- 마지막 화면에 없는 요소']);
@@ -181,7 +186,7 @@ describe('웹 맥락의 누르기 · 넣기 · 확인', () => {
   });
 
   it('네이티브 화면 글 · 손짓 · 키보드 · 앱 다시 띄우기 명령은 막는다', async () => {
-    for (const 명령 of [['swipe', 'up'], ['scroll-to', '리뷰'], ['long-press', 'w1'], ['app', 'restart'], ['crawl'], ['swipe-in', 'w1', 'left'], ['drag', 'w1', 'w2'], ['pinch-open', 'w1'], ['tap-xy', '1', '1']]) {
+    for (const 명령 of [['swipe', 'up'], ['scroll-to', '리뷰'], ['long-press', 'w1'], ['app', 'restart'], ['crawl'], ['swipe-in', 'w1', 'left'], ['drag', 'w1', 'w2'], ['pinch-open', 'w1'], ['tap-xy', '1', '1'], ['press', 'home'], ['type', '1234']]) {
       await expect(run(['-s=probe', ...명령], env)).rejects.toThrow(`웹 맥락(${WEB})에서는 ${명령[0]} 을 못 쓴다`);
     }
     expect(fetchMock).not.toHaveBeenCalled();

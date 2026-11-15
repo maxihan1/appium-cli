@@ -27,6 +27,10 @@ npx appium-cli -s=probe swipe-in '~deals' left # Ran: await 요소안에서밀�
 npx appium-cli -s=probe drag e7 e9             # Ran: await 끌어놓기(driver, '<어디서>', '<어디로>') — 앞 요소를 뒤 요소 가운데로 끌어 놓는다
 npx appium-cli -s=probe pinch-open '~map'      # Ran: await 벌리기(driver, '~map') — 두 손가락을 벌린다(pinch-close 는 오므리기)
 npx appium-cli -s=probe tap-xy 540 1200        # 좌표를 누른다 — 눌러 보기만, Ran 줄은 주석뿐(요소가 없는 자리는 케이스에서 보류다)
+npx appium-cli -s=probe clear '~search'       # Ran: await 칸비우기(await driver.$('~search').getElement()) — 칸을 비운다
+npx appium-cli -s=probe press home             # Ran: await 키누르기(driver, '홈') — recent · delete · tab · paste 도
+npx appium-cli -s=probe type 123456            # Ran: await 포커스칸에치기(driver, '123456') — 포커스 칸에 키를 하나씩(인증번호 여섯 칸)
+npx appium-cli -s=probe clipboard write A1     # Ran: await 클립보드쓰기(driver, 'A1') — 인자 없이 부르면 읽는다(클립보드읽기)
 npx appium-cli -s=probe wait '~Saved'          # Ran: await 뜰때까지(driver, '~Saved') · Waited: 420ms · 새 화면 (--gone 이면 사라질때까지 · --timeout 10000 · 못 되면 종료 코드 1)
 npx appium-cli -s=probe wait --text '저장됨'     # 글자를 가진 요소 — Ran 줄은 없다
 npx appium-cli -s=probe tap e3 && npx appium-cli -s=probe toast   # Toast: 「저장됐어요」 — 누른 바로 뒤에 부른다, 못 봤으면 종료 코드 1 (--timeout 5000)
