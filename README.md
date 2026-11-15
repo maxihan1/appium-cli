@@ -38,6 +38,8 @@ npx appium-cli -s=probe fill e11 'bob@example.com'
 npx appium-cli -s=probe fill e12 '10203040' --submit   # 넣은 뒤 키보드 완료(mobile: performEditorAction done) — Ran 줄 둘
 npx appium-cli -s=probe hide-keyboard          # 키보드가 아래 버튼을 가리면 — Ran: await driver.hideKeyboard()
 npx appium-cli -s=probe generate-locator e17   # driver.$('~Login button')
+npx appium-cli -s=probe contexts                # 웹뷰 맥락 목록 (NATIVE_APP · WEBVIEW_<꾸러미>) — 웹뷰 디버깅을 켠 빌드라야 보인다
+npx appium-cli -s=probe context WEBVIEW_com.shop   # 웹 맥락으로 — 웹 화면 줄은 [ref=wN], 선택자는 웹 케이스 순서의 WebdriverIO 꼴('[data-testid="…"]' · 'aria/이름' · 'button=글' · CSS)
 npx appium-cli -s=probe app restart            # Ran: await driver.terminateApp('…') · activateApp — 새 화면
 npx appium-cli -s=probe app clear              # Ran: mobile: clearApp — 앱 데이터를 지우고 다시 띄운다
 npx appium-cli -s=probe close

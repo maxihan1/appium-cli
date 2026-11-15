@@ -655,7 +655,7 @@ describe('attach', () => {
     const out = await run(['-s=kit', 'attach', 'kit-7'], env);
 
     expect(out).toMatch(/^session kit 붙음 \(kit-7\)\n- Snapshot: \.appium-cli\/screen-\d+\.txt$/);
-    expect(부른길()).toEqual(['GET /session/kit-7/source']);
+    expect(부른길()).toEqual(['GET /session/kit-7/context', 'GET /session/kit-7/source']);
     expect(JSON.parse(readFileSync('.appium-cli/kit.json', 'utf8'))).toMatchObject({ sessionId: 'kit-7', 붙음: true });
   });
 
