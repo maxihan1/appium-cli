@@ -85,6 +85,7 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
   attrs <ref>                        그 요소의 원래 XML 속성 (한 줄에 키=값 · 비밀번호 칸 text 는 안 낸다)
   screen                             지금 화면 키 · 이름 (crawl 과 같은 키 — 앱 화면 파일의 화면 주소 값)
   app restart | clear                앱을 다시 띄운다 (clear 는 앱 데이터를 지운 뒤) — open 의 intent 인자(optionalIntentArguments)를 다시 싣는다
+                                     (Ran: await 앱다시켜기(driver, '<꾸러미>') · 앱비우기(driver) · 인자가 있으면 인자로켜기(driver, { … }) · 앱비우기(driver, { … }))
                                      붙은 session 은 --force 가 있어야 한다 (남의 앱을 다시 띄운다)
   app front                          다른 앱 · 시스템 화면을 본 뒤 시험 대상 앱을 다시 앞에 둔다 (Ran: await driver.activateApp('<꾸러미>'))
                                      화면이 시험 대상 앱이 아니면 snapshot 끝에 「- 앞 앱: <꾸러미>」 줄이 붙는다
@@ -92,6 +93,12 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
                                      (CAMERA 처럼 줄여도 된다 · Was: 앞 상태 · 되돌릴 명령). revoke 하면 Android 가 앱을 꺼서 다시 띄운다
                                      케이스에서는 권한상태에서(driver, { 준다 · 뺀다 }, async () => { … }) 구간으로 쓴다
                                      권한 창의 허용 · 거부 단추를 tap 하면 Ran: await 권한창답하기(driver, '허용' | '거부')
+  background <초>                      앱을 그 초만큼 뒤로 보냈다 돌아온다 — 다시 앞에 올 때 화면 · 입력이 남나 (Ran: await 뒤로보냈다오기(driver, <초>))
+  deeplink <주소>                      딥 링크로 시험 대상 앱의 그 화면을 연다 (Ran: await 딥링크열기(driver, '<주소>'))
+  screen-off-on                      화면을 껐다 켠다(잠금 · 풀기) — 잠금 화면에 PIN 이 걸린 폰은 못 푼다 (Ran: await 화면껐다켜기(driver))
+  reinstall                          시험 대상 앱을 지우고 open 의 앱 파일을 다시 깐 뒤 띄운다 — 처음 깐 상태 (Ran: await 앱다시깔기(driver))
+                                     패키지 이름으로 연 스토어 앱은 지우지 않는다. 붙은 session 은 --force
+                                     옛 판에서 새 판으로 올리기는 케이스에서만 — 옛판에서올리기(driver, async () => { … }) 구간(옛 판은 빌드 목록의 앞 빌드)
   notifications                      알림 창을 내리고 찍는다 (Ran: await 알림창열기(driver)) — 푸시는 tap, 닫기는 back
   record start | stop [--out <파일.mp4>]   화면 녹화 (로컬 Appium 용 — 팜은 artifacts 의 video-N.mp4)
   contexts                           앱 안 웹 화면(웹뷰) 맥락 목록 — 지금 맥락에 (지금). 앱이 웹뷰 디버깅을 켠 빌드라야 WEBVIEW_… 가 보인다
@@ -129,6 +136,13 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
 API 꼴: --api-pattern <식> (모임 둘: method · url — 기본은 OkHttp '--> GET https://…'). 물음표 · # 뒤는 지운다`;
 
 const 따옴표 = (s: string): string => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+
+/** startActivity 로 띄우는 intent 인자를 kit 인자로켜기 · 앱비우기 가 받는 `{ 이름: '값' }` 꼴로 — kit 은 글 인자(-e · --es)만 받아 다른 꼴이 끼면 null */
+function 인자꼴(arg: Record<string, unknown>): string | null {
+  const extras = arg.extras as string[][];
+  if (!extras.every((e) => e[0] === 's')) return null;
+  return `{ ${extras.map(([, k, v]) => `${/^[A-Za-z_$][\w$]*$/.test(k!) ? k! : 따옴표(k!)}: ${따옴표(v!)}`).join(', ')} }`;
+}
 
 // playwright-cli 처럼 `/식/i` 로 플래그를 붙인다 — JS 정규식은 `(?i)` 를 모른다
 function 정규식(s: string): RegExp {
@@ -453,6 +467,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
         return typeof v === 'string' ? [[k, v]] : [];
       }),
     ) as 띄운앱;
+    if (!패키지이름인가(app)) 앱.app = app;
     const s: 세션 = { sessionId: 열림.sessionId, snapshot: null, refs: {}, width: 0, height: 0, 앱 };
     await 적는다(파일, s);
     const 찍음 = await 찍는다(c, s, false);
@@ -469,6 +484,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
   if (s.붙음 === true && 명령 === 'notifications' && values.force !== true) throw new Error('붙은 session 에서 알림 창을 내리면 케이스가 쓰는 앱 위를 덮는다 — 그래도 하려면 --force');
   // app front 는 붙은 session 의 꾸러미를 몰라 아래에서 따로 거절한다
   if (s.붙음 === true && 명령 === 'app' && 인자[0] !== 'front' && values.force !== true) throw new Error('붙은 session 에서 app 을 하면 케이스가 쓰는 앱을 다시 띄운다(clear 는 데이터도 지운다) — 그래도 하려면 --force');
+  if (s.붙음 === true && 명령 === 'reinstall' && values.force !== true) throw new Error('붙은 session 에서 reinstall 을 하면 케이스가 쓰는 앱을 지우고 다시 깐다 — 그래도 하려면 --force');
   if (s.붙음 === true && 명령 === 'settings' && 인자.length > 0 && values.force !== true) throw new Error('붙은 session 의 설정을 바꾸면 케이스가 바뀐 설정으로 돈다 — 그래도 하려면 --force');
   if (s.붙음 === true && 명령 !== 'close') await 맥락을맞춘다(c, s);
   if (s.맥락 !== undefined && 네이티브명령.has(명령)) throw new Error(`웹 맥락(${s.맥락})에서는 ${명령} 을 못 쓴다 — context NATIVE_APP 으로 돌아가서 쓴다`);
@@ -985,15 +1001,60 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       // 띄울 길을 먼저 정한다 — intent 인자를 못 옮기면 앱을 끄거나 비우기 전에 던진다
       const 띄움 = 띄우기(꾸러미, s.앱);
       const 실행 = (script: string, arg: Record<string, unknown>): Promise<unknown> => 부른다(c, 'POST', `/session/${sid}/execute/sync`, { script, args: [arg] });
-      if (할일 === 'restart') {
-        await 실행('mobile: terminateApp', { appId: 꾸러미 });
-        코드 = `await driver.terminateApp(${따옴표(꾸러미)})`;
-      } else {
-        await 실행('mobile: clearApp', { appId: 꾸러미 });
-        코드 = `await driver.execute('mobile: clearApp', { appId: ${따옴표(꾸러미)} })`;
-      }
+      await 실행(할일 === 'restart' ? 'mobile: terminateApp' : 'mobile: clearApp', { appId: 꾸러미 });
       await 실행(띄움.script, 띄움.arg);
-      코드 += `\nRan: ${띄움.script === 'mobile: activateApp' ? `await driver.activateApp(${따옴표(꾸러미)})` : `await driver.execute('mobile: startActivity', ${JSON.stringify(띄움.arg)})`}`;
+      // kit 부품과 같은 요청이다 — 앱다시켜기 · 인자로켜기 는 끈 뒤 띄우고, 앱비우기 는 비운 뒤(clearApp 이 앱도 끈다) 띄운다
+      const 인자말 = 띄움.script === 'mobile: activateApp' ? undefined : 인자꼴(띄움.arg);
+      if (인자말 === null) {
+        // 글이 아닌 intent 인자(--ez · --ei …)는 kit 부품이 안 받는다 — 같은 요청을 직접 부르는 줄로 낸다
+        코드 = [
+          할일 === 'restart' ? `await driver.terminateApp(${따옴표(꾸러미)})` : `await driver.execute('mobile: clearApp', { appId: ${따옴표(꾸러미)} })`,
+          `await driver.execute('mobile: startActivity', ${JSON.stringify(띄움.arg)})`,
+        ].join('\nRan: ');
+      } else if (할일 === 'restart') {
+        코드 = 인자말 === undefined ? `await 앱다시켜기(driver, ${따옴표(꾸러미)})` : `await 인자로켜기(driver, ${인자말})`;
+      } else {
+        코드 = `await 앱비우기(driver${인자말 === undefined ? '' : `, ${인자말}`})`;
+      }
+      break;
+    }
+    case 'background': {
+      const 초 = Number(인자[0]);
+      if (!Number.isInteger(초) || 초 < 1 || 초 > 600) throw new Error('background 는 1~600 초다 — 그 초만큼 뒤에 있다 돌아온다');
+      // kit 뒤로보냈다오기 와 같은 요청 — 돌아올 때까지 답을 안 준다
+      await 부른다(c, 'POST', `/session/${sid}/execute/sync`, { script: 'mobile: backgroundApp', args: [{ seconds: 초 }] });
+      코드 = `await 뒤로보냈다오기(driver, ${초})`;
+      break;
+    }
+    case 'deeplink': {
+      const 주소 = 인자[0];
+      if (주소 === undefined || !/^[a-z][a-z0-9+.-]*:/i.test(주소)) throw new Error('deeplink 에 주소(myapp://… · https://…)가 필요하다');
+      // 시험 대상 앱으로 연다 — 꾸러미를 안 주면 같은 주소를 받는 다른 앱 · 고르는 창이 뜬다
+      const 꾸러미 = s.앱?.appPackage;
+      if (꾸러미 === undefined) throw new Error('시험 대상 앱 꾸러미를 모른다 — open 으로 연 session 에서만 쓴다');
+      await 부른다(c, 'POST', `/session/${sid}/execute/sync`, { script: 'mobile: deepLink', args: [{ url: 주소, package: 꾸러미 }] });
+      코드 = `await 딥링크열기(driver, ${따옴표(주소)})`;
+      break;
+    }
+    case 'screen-off-on': {
+      const 실행 = (script: string): Promise<unknown> => 부른다(c, 'POST', `/session/${sid}/execute/sync`, { script, args: [{}] });
+      await 실행('mobile: lock');
+      await 실행('mobile: unlock');
+      코드 = 'await 화면껐다켜기(driver)';
+      break;
+    }
+    case 'reinstall': {
+      // 팜이 이번에 깐 시험 대상 앱만 — 패키지 이름으로 연 스토어 앱은 팜이 「남길 앱」으로 둔 것이라 지우면 다음 실행이 그 폰을 못 잡는다
+      const 꾸러미 = s.앱?.appPackage;
+      const 파일 = s.앱?.app;
+      if (꾸러미 === undefined) throw new Error('시험 대상 앱 꾸러미를 모른다 — open 으로 연 session 에서만 쓴다');
+      if (파일 === undefined) throw new Error('open 이 깐 앱 파일이 없다 — 패키지 이름으로 연 스토어 앱은 지우지 않는다(팜이 「남길 앱」으로 둔 앱이다). 앞 판에서 연 session 이면 다시 open 한다');
+      const 실행 = (script: string, arg: Record<string, unknown>): Promise<unknown> => 부른다(c, 'POST', `/session/${sid}/execute/sync`, { script, args: [arg] });
+      // kit 앱다시깔기 와 같은 요청
+      await 실행('mobile: removeApp', { appId: 꾸러미 });
+      await 실행('mobile: installApp', { appPath: 파일 });
+      await 실행('mobile: activateApp', { appId: 꾸러미 });
+      코드 = 'await 앱다시깔기(driver)';
       break;
     }
     case 'scroll-to': {
