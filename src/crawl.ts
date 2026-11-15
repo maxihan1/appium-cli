@@ -3,6 +3,7 @@
 import { createHash } from 'node:crypto';
 
 import { logcat을읽는다, 가라앉기, 띄우기, 부른다, 요소를찾는다, 좌표를누른다, 화면을기다린다, type 띄운앱, type 연결 } from './appium.js';
+import { 줄더하기, 밀림표시, 처음줄들, 창글 } from './crawl-motion.js';
 import { 기록글, type 상태 } from './crawl-out.js';
 import { apiLines } from './logcat.js';
 import { center, locatorFor, w3c, type 요소, type 화면 } from './platform/android.js';
@@ -139,7 +140,7 @@ export interface 지금 {
 
 // screen 명령도 이것으로 본다 — 크롤이 남기는 키와 같은 값이어야 해서
 export async function 본다(c: 연결, sid: string, 앞?: string): Promise<지금> {
-  const 화면 = await 화면을기다린다(c, sid, 앞);
+  const 화면 = await 화면을기다린다(c, sid, 앞, true);
   const activity = String(await 부른다(c, 'GET', `/session/${sid}/appium/device/current_activity`));
   const 앱 = String(await 부른다(c, 'GET', `/session/${sid}/appium/device/current_package`));
   return { 화면, 정보: 화면을가린다(화면, activity), 앱 };
@@ -155,6 +156,8 @@ export interface 본화면 extends 화면정보 {
   로그인풀림?: true;
   // 화면 파일 글(`# <키>` · 입력칸 줄 · 화면 글) — test_platform `record`
   record: string;
+  // 화면 파일 머리 줄(`# 계속 움직임: …` · `# 앱 밖: …` · `# 굴림: …` · `# 같은 id: …` · `# 잠깐 뜸: …` · `# 확인 창: …`) — record 에 안 넣어 글자 지문이 안 흔들린다
+  움직임: string[];
   // 이 화면으로 온 누르기 · 이 화면에서 누르기 전까지 logcat 에 찍힌 API (물음표 뒤는 지움)
   apis: { method: string; url: string }[];
 }
@@ -187,6 +190,7 @@ const 남길화면 = (x: 지금, path: string[], 탈퇴로: boolean, 상태: 상
   ...(탈퇴로 || 탈퇴말인가(x.정보.name) || 탈퇴말인가(x.정보.key) ? { 탈퇴흐름: true } : {}),
   ...(로그인화면인가(Object.values(x.화면.refs)) ? { 로그인풀림: true } : {}),
   record: 기록글(x.정보.key, x.화면),
+  움직임: 처음줄들(x.화면, 목록(x.화면), 가라앉기.최대_ms / 1000),
   apis: [],
 });
 
@@ -230,11 +234,15 @@ export async function crawl(
     }
   };
 
-  // 누른 뒤 확인 창이 떴으면 확인 버튼 하나를 누르거나 back 으로 닫는다 — 창이 이어 뜨면(확인 뒤 「됐다」 창) 세 개까지. 경로 다시 누르기에서는 세지 않는다
-  const 창을닫는다 = async (탈퇴로: boolean, 셈: boolean): Promise<void> => {
+  // 누른 뒤 확인 창이 떴으면 확인 버튼 하나를 누르거나 back 으로 닫는다 — 창이 이어 뜨면(확인 뒤 「됐다」 창) 세 개까지. 경로 다시 누르기에서는 세지 않는다.
+  // 닫은 창의 제목 · 본문 글을 돌려준다
+  const 창을닫는다 = async (탈퇴로: boolean, 셈: boolean): Promise<string[]> => {
+    const 창글들: string[] = [];
     for (let n = 0; n < 3; n++) {
       const 판 = 확인창(Object.values(지금.화면.refs), 탈퇴로);
-      if (판 === null) return;
+      if (판 === null) return 창글들;
+      const 글 = 창글(Object.values(지금.화면.refs));
+      if (글 !== null) 창글들.push(글);
       if (셈) r.dialogs[판.결과] = (r.dialogs[판.결과] ?? 0) + 1;
       // 버튼이 그사이 사라져 못 누르면 back 으로 닫는다 — 창 하나 때문에 크롤 전체가 멈추지 않게
       const 버튼 = 판.버튼;
@@ -242,6 +250,7 @@ export async function crawl(
       if (!눌렀다) await 부른다(c, 'POST', `/session/${sid}/back`, {});
       지금 = await 본다(c, sid, 지금.화면.글);
     }
+    return 창글들;
   };
 
   const 앱에 = (script: string): Promise<unknown> => 부른다(c, 'POST', `/session/${sid}/execute/sync`, { script, args: [{ appId: app }] });
@@ -396,6 +405,7 @@ export async function crawl(
           민수++;
           const 새 = 후보들(지금.화면, 뺄, 로그인남음()).filter((x) => !할일.some((y) => y.이름 === x.이름));
           if (새.length === 0) break;
+          밀림표시(목표.움직임, 목록(지금.화면));
           할일.push(...새.slice(0, 화면누름상한 - 할일.length).map((x) => ({ 이름: x.이름, 깊이: 민수 })));
         }
         const { 이름, 깊이 } = 할일[i]!;
@@ -414,8 +424,15 @@ export async function crawl(
         }
         r.presses++;
         지금 = await 본다(c, sid, 앞.화면.글);
-        await 창을닫는다(탈퇴말인가(이름), true);
+        const 잠깐 = 지금.화면.기다림?.잠깐 ?? [];
+        const 창들 = await 창을닫는다(탈퇴말인가(이름), true);
         const 뒤 = 지금.정보;
+        // 버튼 이름 몫으로 누른 화면(목표)에 남긴다 — 어느 버튼이 그랬는지가 케이스에 필요하다
+        const 버튼말 = `버튼 「${이름.replace(/\s+/g, ' ').trim().slice(0, 60)}」`;
+        // 바탕 화면(launcher)으로 간 것은 앱이 꺼진 것이지 다른 앱을 연 게 아니다. 다른 앱 화면에서 본 글은 이 버튼 몫이 아니다
+        if (지금.앱 !== app && !/launcher/i.test(지금.앱)) 줄더하기(목표.움직임, `# 앱 밖: ${버튼말} → ${지금.앱.replace(/\s+/g, '')}`);
+        if (지금.앱 === app) for (const 글 of 잠깐) 줄더하기(목표.움직임, `# 잠깐 뜸: 「${글}」 ← ${버튼말}`);
+        for (const 글 of 창들) 줄더하기(목표.움직임, `# 확인 창: 「${글}」 ← ${버튼말}`);
         const 간곳 = 지금.앱 === app ? 뒤.key : 목표.key;
         const 풀림 = 상태 !== '로그아웃' && !로그아웃 && 지금.앱 === app && 로그인화면인가(Object.values(지금.화면.refs));
         if (풀림 && !다시본.has(`${목표.key} ${이름}`)) {

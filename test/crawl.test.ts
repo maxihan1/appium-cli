@@ -592,6 +592,109 @@ describe('crawl 결과 파일', () => {
   });
 });
 
+describe('crawl 화면 머리 줄', () => {
+  const 파일 = (n: string): string[] => readFileSync(join('.appium-cli/crawl/로그아웃', n), 'utf8').split('\n');
+  const 줄들 = (n: number): 버튼[] => Array.from({ length: n }, (_, k) => ({ desc: `r${k + 1}` }));
+  // /source 답을 화면 이름(쌓임 맨 위)과 읽은 차례로 바꿔치기한다
+  const 소스바꾸기 = (바꿈: (위: string, 차례: number, xml: string) => string): void => {
+    const 기본처리 = fetchMock.getMockImplementation()!;
+    const 차례: Record<string, number> = {};
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
+      const 답 = (await 기본처리(url, init)) as Response;
+      if (!url.endsWith('/source')) return 답;
+      const 위 = 쌓임.at(-1)!;
+      차례[위] = (차례[위] ?? 0) + 1;
+      const xml = (JSON.parse(await 답.text()) as { value: string }).value;
+      return new Response(JSON.stringify({ value: 바꿈(위, 차례[위]!, xml) }));
+    });
+  };
+  const 끼우기 = (xml: string, 칸: string): string => xml.replace('</android.view.ViewGroup>', `${칸}</android.view.ViewGroup>`);
+
+  it('기다리는 내내 글이 달라지면 계속 움직임 줄을 그 화면에 남기고, 멈춘 화면 · 안 바뀐 화면에는 안 남긴다', async () => {
+    Object.assign(가라앉기, { 최대_ms: 200, 간격_ms: 2 });
+    화면들 = {
+      A: { 틀: { desc: 'a screen' }, 제목: 'Home', 버튼: [{ desc: 'to b' }], 길: { 'to b': 'B' } },
+      B: { 틀: { desc: 'b screen' }, 제목: 'Bee', 버튼: [], 길: {} },
+    };
+    소스바꾸기((위, 차례, xml) => (위 === 'B' ? xml.replace('Bee', `Bee ${차례}`) : xml));
+
+    await run(['-s=c', 'crawl'], env);
+
+    expect(파일('002.yml').slice(0, 3)).toEqual(['# app:.Main/b screen', '# 계속 움직임: 누른 뒤 기다리는 동안(최대 0.2초) 화면 글이 멈추지 않았다 — 기다릴 때 움직이는화면에서 를 쓴다', expect.stringMatching(/^화면 /)]);
+    expect(파일('001.yml').join('\n')).not.toContain('계속 움직임');
+  });
+
+  it('누른 뒤 지금 앱이 크롤하는 앱이 아니면 앱 밖 줄을 누른 화면에 남긴다', async () => {
+    await run(['-s=c', 'crawl'], env);
+
+    expect(파일('001.yml')).toContain('# 앱 밖: 버튼 「open web」 → com.android.chrome');
+    expect(파일('002.yml').join('\n')).not.toContain('앱 밖');
+  });
+
+  it('스크롤 목록은 굴림 줄, 밀어서 새 후보가 보이면 같은 줄 끝에 밀면 새 줄이 보인다를 붙인다 — 새 줄이 없으면 안 붙인다', async () => {
+    화면들 = {
+      A: { 틀: { desc: 'a screen' }, 제목: 'Home', 버튼: [{ desc: 'top' }], 길: {}, 목록: 줄들(7) },
+      S: { 틀: { desc: 's screen' }, 제목: 'Short', 버튼: [], 길: {}, 목록: 줄들(3) },
+    };
+    await run(['-s=c', 'crawl'], env);
+    expect(파일('001.yml').filter((x) => x.startsWith('# 굴림'))).toEqual(['# 굴림: 목록 「이름 없음」 — 밀면 새 줄이 보인다']);
+
+    화면들 = { A: { 틀: { desc: 'a screen' }, 제목: 'Home', 버튼: [{ desc: 'top' }], 길: {}, 목록: 줄들(3) } };
+    [쌓임, 내림] = [['A'], {}];
+    await run(['-s=c', 'crawl'], env);
+    expect(파일('001.yml').filter((x) => x.startsWith('# 굴림'))).toEqual(['# 굴림: 목록 「이름 없음」']);
+  });
+
+  it('같은 resource-id 가 두 번 넘게 나오면 많은 차례로 같은 id 줄 하나를 남긴다 — 두 번뿐인 id 와 android: id 는 뺀다', async () => {
+    const 칸 = (id: string, n: number): 버튼[] => Array.from({ length: n }, () => ({ id }));
+    화면들 = {
+      A: { 틀: { desc: 'a screen' }, 제목: 'Home', 버튼: [...칸('com.shop:id/row', 3), ...칸('com.shop:id/card', 4), ...칸('com.shop:id/pair', 2), ...칸('android:id/x', 5)], 길: {} },
+    };
+
+    await run(['-s=c', 'crawl'], env);
+
+    expect(파일('001.yml').filter((x) => x.startsWith('# 같은 id'))).toEqual(['# 같은 id: id=com.shop:id/card 4개 · id=com.shop:id/row 3개']);
+  });
+
+  it('누른 뒤 기다리는 동안 뜬 Toast 를 누른 버튼 이름과 함께 누른 화면에 남기고, 중간에만 보인 보통 글(불러오는 중)은 안 남긴다', async () => {
+    Object.assign(가라앉기, { 최대_ms: 500, 간격_ms: 1 });
+    화면들 = {
+      A: { 틀: { desc: 'a screen' }, 제목: 'Home', 버튼: [{ desc: 'to b' }], 길: { 'to b': 'B' } },
+      B: { 틀: { desc: 'b screen' }, 제목: 'Bee', 버튼: [], 길: {} },
+    };
+    const 글 = (t: string, cls: string): string => `<android.widget.${cls} text="${t}" content-desc="" resource-id="" clickable="false" bounds="[0,0][9,9]" />`;
+    소스바꾸기((위, 차례, xml) => (위 !== 'B' ? xml : 차례 === 1 ? 끼우기(xml, 글('불러오는 중', 'TextView')) : 차례 === 2 ? 끼우기(xml, 글('저장했습니다', 'Toast')) : xml));
+
+    await run(['-s=c', 'crawl'], env);
+
+    expect(파일('001.yml').filter((x) => x.startsWith('# 잠깐 뜸'))).toEqual(['# 잠깐 뜸: 「저장했습니다」 ← 버튼 「to b」']);
+    expect(파일('002.yml').join('\n')).not.toContain('잠깐 뜸');
+  });
+
+  it('누른 뒤 확인 창이 뜨면 제목 · 본문 글을 확인 창 줄로 남기고 창은 지금처럼 닫는다', async () => {
+    화면들 = {
+      A: { 틀: { desc: 'a screen' }, 제목: 'Home', 버튼: [{ desc: 'ask' }], 길: { ask: 'D' } },
+      D: {
+        틀: {},
+        제목: '',
+        버튼: [
+          { cls: 'TextView', id: 'android:id/alertTitle', text: '저장할까요?' },
+          { cls: 'TextView', id: 'android:id/message', text: '변경 내용을 저장합니다' },
+          { id: 'android:id/button2', text: '취소' },
+          { id: 'android:id/button1', text: '확인' },
+        ],
+        길: { 'android:id/button1': '<', 'android:id/button2': '<' },
+      },
+    };
+
+    await run(['-s=c', 'crawl'], env);
+
+    expect(파일('001.yml')).toContain('# 확인 창: 「저장할까요? / 변경 내용을 저장합니다」 ← 버튼 「ask」');
+    expect(눌림).toEqual(['A ask', 'D android:id/button1']);
+    expect(결과().dialogs).toEqual({ 누름: 1 });
+  });
+});
+
 describe('crawl --out 정리', () => {
   // 크롤이 쓰는 것 몇 개 + 남의 파일 — 거절이면 하나도 안 지워져야 한다
   const 심는다 = (곳: string): void => {
