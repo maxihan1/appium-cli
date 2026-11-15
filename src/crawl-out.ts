@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 
 import type { 크롤결과 } from './crawl.js';
 import { 머리줄끼우기 } from './crawl-motion.js';
-import type { 화면 } from './platform/android.js';
+import { 상태칸뺌, type 화면 } from './platform/android.js';
 import { 입력칸인가 } from './press.js';
 
 /** test_platform `상태`(authoring-screens-keep.ts) · DB CHECK 와 같은 꼴 */
@@ -22,11 +22,11 @@ export function 기록글(key: string, h: 화면): string {
   return [`# ${key}`, ...칸, h.글, ''].join('\n');
 }
 
-/** 글자 지문 — test_platform `글자지문`(authoring-crawl-rules.ts)과 같다. 본문 숫자(좌표 · ref 번호 · 개수)는 0 으로, `#` 머리 줄은 숫자까지 본다 */
+/** 글자 지문 — test_platform `글자지문`(authoring-crawl-rules.ts)과 같다. 본문 숫자(좌표 · ref 번호 · 개수)는 0 으로, `#` 머리 줄은 숫자까지 본다. 본문의 선택됨 · 포커스 칸은 뺀다(상태칸뺌) */
 export function 글자지문(파일글: string): string {
   const 정리 = 파일글
     .split('\n')
-    .map((줄) => (줄.startsWith('#') ? 줄 : 줄.replace(/\d+/g, '0')).replace(/[ \t]+/g, ' '))
+    .map((줄) => (줄.startsWith('#') ? 줄 : 상태칸뺌(줄).replace(/\d+/g, '0')).replace(/[ \t]+/g, ' '))
     .join('\n');
   return createHash('sha1').update(정리).digest('hex').slice(0, 12);
 }

@@ -9,6 +9,7 @@ import { logcat을읽는다, 가라앉기, 띄우기, 산출물을받는다, 연
 import { crawl, 본다 } from './crawl.js';
 import { 결과파일들, 상태인가, 저장본모양 } from './crawl-out.js';
 import { 기다린다, 길게기본_ms, 길게누른다, 두번누른다, 맞추기, 양의정수, 토스트를본다, 토스트줄 } from './gesture.js';
+import { 굴려찾기선택자, 먼저뜬다, 보인다, 세어본다, 셈줄, 조회한다 } from './find.js';
 import { apiLines } from './logcat.js';
 import { capabilities, center, locatorFor, w3c, 패키지이름인가, type 요소 } from './platform/android.js';
 
@@ -44,20 +45,27 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
                                      붙은 session 의 logs · crawl 은 --force 가 있어야 한다 (logcat 새 줄을 가로채 케이스 쪽에서 사라진다)
   snapshot [--raw]                   화면을 파일로 떨군다 (--raw 면 글을 그대로)
   find <글자> | --regex <식>           마지막 화면에서 줄을 찾는다
-  tap <ref|선택자>                     누른다 (click 도 같다). 선택자 '~desc' · 'id=…' 는 지금 화면에서 찾는다
+  tap <ref|선택자>                     누른다 (click 도 같다). 선택자 '~desc' · 'id=…' · 'android=…'(부모 꼴 · 뜨는 창 꼴) 는 지금 화면에서 찾는다
                                      tap · long-press · double-tap 은 누른 뒤 기다리는 동안 본 토스트를 끝에 Toast: 「글」 줄로 덧붙인다
   long-press <ref|선택자> [--ms 1200]   요소를 길게 누른다 — 케이스와 같은 동작 (Ran: await 길게누르기(driver, '<선택자>'))
   double-tap <ref|선택자>              같은 자리를 짧게 두 번 (Ran: await 두번누르기(await driver.$('<선택자>').getElement()))
   wait <선택자> | --text <글자> [--gone] [--timeout 10000]
                                      그 요소(--text 면 그 글자를 가진 요소)가 뜰 때까지 (--gone 이면 사라질 때까지) 화면을 되풀이해 읽는다
                                      뜨면 걸린 ms 와 새 화면 경로, 시간 안에 안 되면 까닭 한 줄과 종료 코드 1 (Ran: await 뜰때까지 · 사라질때까지(driver, '<선택자>'))
+  wait-any <선택자> <선택자>… [--timeout 30000]   후보 가운데 먼저 보이는 것 — Found: <선택자> 와 새 화면 (Ran: await 먼저뜨는것(driver, { … })). 없으면 종료 코드 1
+  count <선택자>                       지금 화면을 찍고 그 선택자가 몇 개 맞나 · 맞은 자리마다 같은 자리의 ref — 하나만 맞아야 케이스에 쓴다
+  visible <선택자>                     기다리지 않고 지금 보이나 (Ran: await 보이나(driver, '<선택자>'))
+  scroll-to <글자>                     굴릴 수 있는 첫 목록을 그 글자가 보일 때까지 굴린다 (Ran: await 스크롤해서찾기(driver, '<글자>'))
   toast [--timeout 5000]             지금부터 그 시간 동안 화면을 읽어 Toast · 스낵바 글을 Toast: 「글」 한 줄씩 낸다 — 못 봤으면 종료 코드 1 (누른 바로 뒤에 부른다)
   fill <ref|선택자> <값> [--submit]     입력한다 (--submit 이면 넣은 뒤 키보드 완료(IME done)를 보낸다)
   hide-keyboard                      키보드를 내린다 (아래 버튼을 가릴 때)
   swipe up|down|left|right           손가락을 그 방향으로 민다
   back                               뒤로
-  screenshot [--filename <파일>]       스크린샷
-  generate-locator <ref>             webdriverio 선택자
+  screenshot [ref|선택자] [--filename <파일>]   스크린샷 (ref · 선택자를 주면 그 요소만)
+  info                               앱이 떠 있나 · 지금 화면 · 키보드 · 폰 기종 · 배터리
+  settings [키=값 …]                  드라이버 설정을 보거나 바꾼다 (값이 JSON 이면 JSON). 붙은 session 은 바꾸기에 --force
+                                     waitForIdleTimeout 은 케이스에서 움직이는화면에서 구간으로 쓴다 — Ran 줄이 그 꼴을 알려 준다
+  generate-locator <ref|선택자>        webdriverio 선택자 — 선택자를 주면 지금 화면에서 하나만 맞을 때만 내고 맞은 자리의 ref 를 붙인다
   attrs <ref>                        그 요소의 원래 XML 속성 (한 줄에 키=값 · 비밀번호 칸 text 는 안 낸다)
   screen                             지금 화면 키 · 이름 (crawl 과 같은 키 — 앱 화면 파일의 화면 주소 값)
   app restart | clear                앱을 다시 띄운다 (clear 는 앱 데이터를 지운 뒤) — open 의 intent 인자(optionalIntentArguments)를 다시 싣는다
@@ -112,8 +120,9 @@ function API꼴(s: string | undefined): RegExp | undefined {
 // 로그인 스크립트에 쓸 수 있는 명령 — 앱 안에서 누르고 넣는 것만 (open · close · crawl 은 session 을 바꾼다)
 const 스크립트명령 = new Set(['tap', 'click', 'fill', 'back', 'swipe', 'hide-keyboard']);
 
-// ref 대신 선택자(`~desc` · `id=…`)도 받는다 — 로그인 스크립트처럼 ref 번호를 모르고 쓸 때
-const 선택자인가 = (x: string | undefined): x is string => x !== undefined && /^(?:~|id=)./.test(x);
+// ref 대신 선택자(`~desc` · `id=…` · `android=…`)도 받는다 — 로그인 스크립트처럼 ref 번호를 모르고 쓸 때.
+// `android=` 는 test_platform 케이스 규칙의 부모 꼴 · 뜨는 창 꼴(UiSelector)이다
+const 선택자인가 = (x: string | undefined): x is string => x !== undefined && /^(?:~|id=|android=)./.test(x);
 
 /** 로그인 스크립트 — 한 줄이 `appium-cli -s=<이름>` 뒤에 쓰는 명령 하나. 따옴표로 띄어쓰기를 묶고, 빈 줄 · `#` 줄은 건너뛴다. tap · fill 은 선택자만 (ref 는 화면마다 바뀐다) */
 function 스크립트읽기(글: string): string[][] {
@@ -121,19 +130,19 @@ function 스크립트읽기(글: string): string[][] {
     const 낱 = [...줄.matchAll(/'([^']*)'|"([^"]*)"|(\S+)/g)].map((m) => m[1] ?? m[2] ?? m[3]!);
     if (낱.length === 0 || 낱[0]!.startsWith('#')) return [];
     if (!스크립트명령.has(낱[0]!)) throw new Error(`로그인 스크립트 ${i + 1}줄: ${낱[0]} 은 못 쓴다 — tap · fill · back · swipe · hide-keyboard 만`);
-    if (['tap', 'click', 'fill'].includes(낱[0]!) && !선택자인가(낱[1])) throw new Error(`로그인 스크립트 ${i + 1}줄: ref 대신 선택자('~desc' · 'id=…')를 쓴다`);
+    if (['tap', 'click', 'fill'].includes(낱[0]!) && !선택자인가(낱[1])) throw new Error(`로그인 스크립트 ${i + 1}줄: ref 대신 선택자('~desc' · 'id=…' · 'android=…')를 쓴다`);
     return [낱];
   });
   if (줄들.length === 0) throw new Error('로그인 스크립트가 비었다');
   return 줄들;
 }
 
-// --cap 키=값 — 첫 = 에서 가른다(값에 = 가 들어간다). 값이 JSON(true · 5 · ["a"] · "따옴표")이면 그 값, 아니면 글 그대로
-function 캡읽기(쌍들: string[]): Record<string, unknown> {
+// --cap · settings 키=값 — 첫 = 에서 가른다(값에 = 가 들어간다). 값이 JSON(true · 5 · ["a"] · "따옴표")이면 그 값, 아니면 글 그대로
+function 캡읽기(쌍들: string[], 이름 = '--cap'): Record<string, unknown> {
   return Object.fromEntries(
     쌍들.map((쌍) => {
       const i = 쌍.indexOf('=');
-      if (i < 1) throw new Error(`--cap 은 키=값 꼴이다(키가 비면 안 된다): ${쌍}`);
+      if (i < 1) throw new Error(`${이름} 은 키=값 꼴이다(키가 비면 안 된다): ${쌍}`);
       const 값 = 쌍.slice(i + 1);
       try {
         return [쌍.slice(0, i), JSON.parse(값) as unknown];
@@ -380,6 +389,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
     throw new Error(`붙은 session 에서 ${명령} 를 하면 logcat 새 줄을 가로채 케이스 쪽에서 사라진다${명령 === 'crawl' ? ' (앱도 다시 띄운다)' : ''} — 그래도 하려면 --force`);
   }
   if (s.붙음 === true && 명령 === 'app' && values.force !== true) throw new Error('붙은 session 에서 app 을 하면 케이스가 쓰는 앱을 다시 띄운다(clear 는 데이터도 지운다) — 그래도 하려면 --force');
+  if (s.붙음 === true && 명령 === 'settings' && 인자.length > 0 && values.force !== true) throw new Error('붙은 session 의 설정을 바꾸면 케이스가 바뀐 설정으로 돈다 — 그래도 하려면 --force');
 
   switch (명령) {
     case 'snapshot': {
@@ -462,11 +472,13 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
     case 'wait': {
       const 선택자 = 인자[0];
       const 글 = values.text;
-      if ((선택자 === undefined) === (글 === undefined)) throw new Error("wait 에는 선택자('~desc' · 'id=…') 나 --text <글자> 중 하나가 필요하다");
-      if (선택자 !== undefined && !선택자인가(선택자)) throw new Error(`wait 은 ref 가 아니라 선택자('~desc' · 'id=…')를 받는다: ${선택자}`);
+      if ((선택자 === undefined) === (글 === undefined)) throw new Error("wait 에는 선택자('~desc' · 'id=…' · 'android=…') 나 --text <글자> 중 하나가 필요하다");
+      if (선택자 !== undefined && !선택자인가(선택자)) throw new Error(`wait 은 ref 가 아니라 선택자('~desc' · 'id=…' · 'android=…')를 받는다: ${선택자}`);
       const 사라짐 = values.gone === true;
       const 제한 = 양의정수(values.timeout, 10_000, '--timeout');
-      const ms = await 기다린다(c, sid, 선택자 ?? `--text ${JSON.stringify(글)}`, 맞추기(선택자, 글), 사라짐, 제한);
+      // UiSelector 는 화면 글로 못 맞춘다 — 폰에 물어 kit 뜰때까지 처럼 보이는지 본다
+      const 맞음 = 선택자?.startsWith('android=') === true ? (): Promise<boolean> => 보인다(c, sid, 선택자) : 맞추기(선택자, 글);
+      const ms = await 기다린다(c, sid, 선택자 ?? `--text ${JSON.stringify(글)}`, 맞음, 사라짐, 제한);
       const 찍음 = await 찍는다(c, s, false);
       await 적는다(파일, s);
       const 코드 = 선택자 === undefined ? '' : `Ran: await ${사라짐 ? '사라질때까지' : '뜰때까지'}(driver, ${따옴표(선택자)}${제한 === 10_000 ? '' : `, ${제한}`})\n`;
@@ -477,7 +489,55 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       if (본.length === 0) throw new Error('토스트를 못 봤다 — 누른 바로 뒤에 부른다');
       return 본.map(토스트줄).join('\n');
     }
+    case 'wait-any': {
+      if (인자.length < 2 || !인자.every(선택자인가)) throw new Error("wait-any 에는 선택자('~desc' · 'id=…' · 'android=…')가 둘 이상 필요하다");
+      const 제한 = 양의정수(values.timeout, 30_000, '--timeout');
+      const 뜬 = await 먼저뜬다(c, sid, 인자, 제한);
+      const 찍음 = await 찍는다(c, s, false);
+      await 적는다(파일, s);
+      // 열쇠는 선택자 그대로 낸다 — 케이스에서는 화면 이름으로 바꿔 쓴다
+      const 후보 = 인자.map((x) => `${따옴표(x)}: ${따옴표(x)}`).join(', ');
+      return `Ran: await 먼저뜨는것(driver, { ${후보} }${제한 === 30_000 ? '' : `, ${제한}`})\nFound: ${뜬}\n${찍음}`;
+    }
+    case 'count': {
+      const x = 인자[0];
+      if (!선택자인가(x)) throw new Error(`count 은 선택자('~desc' · 'id=…' · 'android=…')를 받는다: ${x ?? '(없음)'}`);
+      // 맞은 자리를 지금 화면의 ref 와 견주려고 먼저 찍는다
+      const 찍음 = await 찍는다(c, s, false);
+      await 적는다(파일, s);
+      const { 수, 줄 } = await 세어본다(c, sid, x, s.refs);
+      return [셈줄(수), ...줄, 찍음].join('\n');
+    }
+    case 'visible': {
+      const x = 인자[0];
+      if (!선택자인가(x)) throw new Error(`visible 은 선택자('~desc' · 'id=…' · 'android=…')를 받는다: ${x ?? '(없음)'}`);
+      return `Ran: await 보이나(driver, ${따옴표(x)})\nVisible: ${(await 보인다(c, sid, x)) ? '예' : '아니오'}`;
+    }
+    case 'info':
+      return 조회한다(c, sid, s.앱?.appPackage);
+    case 'settings': {
+      if (인자.length === 0) {
+        const v = ((await 부른다(c, 'GET', `/session/${sid}/appium/settings`)) ?? {}) as Record<string, unknown>;
+        return Object.entries(v).map(([k, x]) => `${k}=${JSON.stringify(x)}`).join('\n');
+      }
+      const 바꿀 = 캡읽기(인자, 'settings');
+      await 부른다(c, 'POST', `/session/${sid}/appium/settings`, { settings: 바꿀 });
+      // 케이스는 설정을 직접 바꾸지 않는다 — 화면 멈춤 기다림만 kit 구간 부품이 있다(되돌리기까지 맡는다)
+      const 코드 =
+        Object.keys(바꿀).length === 1 && typeof 바꿀.waitForIdleTimeout === 'number'
+          ? `// 케이스에서는 구간으로 쓴다 — await 움직이는화면에서(driver, async () => { … }, ${바꿀.waitForIdleTimeout})`
+          : '// 케이스에 옮길 부품이 없다 — 탐색에서만 바꾼다';
+      return [`Ran: ${코드}`, ...Object.entries(바꿀).map(([k, x]) => `Set: ${k}=${JSON.stringify(x)}`)].join('\n');
+    }
     case 'generate-locator': {
+      if (선택자인가(인자[0])) {
+        const x = 인자[0];
+        const 찍음 = await 찍는다(c, s, false);
+        await 적는다(파일, s);
+        const { 수, 줄 } = await 세어본다(c, sid, x, s.refs);
+        if (수 !== 1) throw new Error([`${x} — ${셈줄(수)}`, ...줄].join('\n'));
+        return [`driver.$(${따옴표(x)})`, ...줄, 찍음].join('\n');
+      }
       const { loc, 겹침 } = 고른다(s, 인자[0]);
       return 선택자글(loc, 겹침) ?? `driver.$(${따옴표(loc!)})`;
     }
@@ -504,7 +564,14 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       return `- Video: ${영상}`;
     }
     case 'screenshot': {
-      const b64 = await 부른다(c, 'GET', `/session/${sid}/screenshot`);
+      const x = 인자[0];
+      let 경로 = `/session/${sid}/screenshot`;
+      if (x !== undefined) {
+        const { loc, 막힘 } = 대상(s, x);
+        if (막힘 !== null) throw new Error(`${x} 는 요소 사진을 못 찍는다 — ${막힘}. 인자 없이 화면 사진을 찍는다`);
+        경로 = `/session/${sid}/element/${await 찾는다(c, sid, loc!)}/screenshot`;
+      }
+      const b64 = await 부른다(c, 'GET', 경로);
       const 그림 = values.filename ?? join(폴더, `screenshot-${Date.now()}.png`);
       await writeFile(그림, Buffer.from(String(b64), 'base64'));
       return `- Screenshot: ${그림}`;
@@ -633,6 +700,19 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       }
       await 실행(띄움.script, 띄움.arg);
       코드 += `\nRan: ${띄움.script === 'mobile: activateApp' ? `await driver.activateApp(${따옴표(꾸러미)})` : `await driver.execute('mobile: startActivity', ${JSON.stringify(띄움.arg)})`}`;
+      break;
+    }
+    case 'scroll-to': {
+      const 글자 = 인자[0];
+      if (글자 === undefined || 글자 === '') throw new Error('scroll-to 에 찾을 글자가 필요하다');
+      const { using, value } = w3c(굴려찾기선택자(글자));
+      // kit 처럼 한 번만 묻는다 — 이 선택자는 물을 때마다 목록을 처음부터 굴린다
+      try {
+        await 요소를찾는다(c, sid, using, value);
+      } catch (e) {
+        throw new Error(`「${글자}」가 든 요소를 굴려도 찾지 못했다 — ${e instanceof Error ? e.message : String(e)}`);
+      }
+      코드 = `await 스크롤해서찾기(driver, ${따옴표(글자)})`;
       break;
     }
     case 'back': {

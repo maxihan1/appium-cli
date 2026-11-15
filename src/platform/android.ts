@@ -106,6 +106,9 @@ export function parseSource(xml: string): 화면 {
       if (누름) 칸.push('클릭');
       if (a.scrollable === 'true') 칸.push('스크롤');
       if (a.checked === 'true') 칸.push('체크됨');
+      // 고른 탭 · 지금 입력을 받는 칸 — 화면 지문에서는 뺀다(상태칸뺌)
+      if (a.selected === 'true') 칸.push('선택됨');
+      if (a.focused === 'true') 칸.push('포커스');
       if (a.enabled === 'false') 칸.push('꺼짐');
       칸.push(a.bounds ?? '', `[ref=${ref}]`);
       줄.push(`${'  '.repeat(조상.filter(Boolean).length)}${칸.join(' ')}`);
@@ -123,9 +126,17 @@ export function locatorFor(el: 요소): string | null {
   return null;
 }
 
-/** 선택자를 W3C find element 의 using · value 로 바꾼다 */
+/**
+ * 화면 지문 재료에서 「선택됨」 · 「포커스」 칸을 뺀다 — v0.6 까지의 지문 · 화면 키와 같은 값이 나오게(저장본 견주기 · 화면 기록 주소).
+ * 포커스는 같은 화면에서도 누를 때마다 옮겨 다닌다
+ * ponytail: 글자 칸(text="…") 안에 「 선택됨 」이 그대로 든 줄도 지문에서는 빠진다 — 지문만 조금 덜 가를 뿐이라 둔다
+ */
+export const 상태칸뺌 = (글: string): string => 글.replace(/ (?:선택됨|포커스)(?= )/g, '');
+
+/** 선택자를 W3C find element 의 using · value 로 바꾼다 — `android=` 는 UiSelector 꼴(부모 꼴 · 뜨는 창 꼴 · 굴려 찾기) */
 export function w3c(locator: string): { using: string; value: string } {
   if (locator.startsWith('~')) return { using: 'accessibility id', value: locator.slice(1) };
+  if (locator.startsWith('android=')) return { using: '-android uiautomator', value: locator.slice('android='.length) };
   return { using: 'id', value: locator.slice('id='.length) };
 }
 

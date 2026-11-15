@@ -43,10 +43,10 @@ export function 맞추기(선택자: string | undefined, 글: string | undefined
 }
 
 /** 화면을 되풀이해 읽어 맞음이 (사라짐이면 아니게) 될 때까지 기다린다. 걸린 ms 를 준다 — 시간 안에 안 되면 던진다 */
-export async function 기다린다(c: 연결, sid: string, 라벨: string, 맞음: (h: 화면) => boolean, 사라짐: boolean, 제한_ms: number): Promise<number> {
+export async function 기다린다(c: 연결, sid: string, 라벨: string, 맞음: (h: 화면) => boolean | Promise<boolean>, 사라짐: boolean, 제한_ms: number): Promise<number> {
   const 시작 = Date.now();
   for (;;) {
-    if (맞음(await 화면을기다린다(c, sid)) !== 사라짐) return Date.now() - 시작;
+    if ((await 맞음(await 화면을기다린다(c, sid))) !== 사라짐) return Date.now() - 시작;
     if (Date.now() - 시작 >= 제한_ms) throw new Error(`${라벨} — ${제한_ms / 1000}초 안에 ${사라짐 ? '사라지지 않았다' : '뜨지 않았다'}`);
     await 쉰다(가라앉기.간격_ms);
   }
