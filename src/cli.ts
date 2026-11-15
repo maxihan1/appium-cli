@@ -8,7 +8,7 @@ import { parseArgs } from 'node:util';
 import { logcat을읽는다, 가라앉기, 띄우기, 산출물을받는다, 연결주소, 부른다, 요소를찾는다, 좌표를누른다, 화면을기다린다, type 띄운앱, type 연결 } from './appium.js';
 import { crawl, 본다 } from './crawl.js';
 import { 결과파일들, 상태인가, 저장본모양 } from './crawl-out.js';
-import { 기다린다, 길게기본_ms, 길게누른다, 두번누른다, 맞추기, 양의정수, 토스트를본다, 토스트줄 } from './gesture.js';
+import { 기다린다, 길게기본_ms, 길게누른다, 두번누른다, 맞추기, 밀방향인가, 방향말, 방향으로, 상자, 손동작정도, 손짓, 양의정수, 토스트를본다, 토스트줄 } from './gesture.js';
 import { 굴려찾기선택자, 먼저뜬다, 보인다, 세어본다, 셈줄, 조회한다 } from './find.js';
 import { apiLines } from './logcat.js';
 import { 권한목록, 권한바꾼다, 권한이름, 권한창답, 권한창알림, 앞앱줄 } from './system.js';
@@ -63,7 +63,12 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
   toast [--timeout 5000]             지금부터 그 시간 동안 화면을 읽어 Toast · 스낵바 글을 Toast: 「글」 한 줄씩 낸다 — 못 봤으면 종료 코드 1 (누른 바로 뒤에 부른다)
   fill <ref|선택자> <값> [--submit]     입력한다 (--submit 이면 넣은 뒤 키보드 완료(IME done)를 보낸다)
   hide-keyboard                      키보드를 내린다 (아래 버튼을 가릴 때)
-  swipe up|down|left|right           손가락을 그 방향으로 민다
+  swipe up|down|left|right           손가락을 그 방향으로 민다 (화면 전체)
+  swipe-in <ref|선택자> up|down|left|right   그 요소 안에서만 민다 — 가로 상품 줄 · 밀어서 삭제 · 아래 시트 · 슬라이더 · 날짜 고르개
+                                     (Ran: await 요소안에서밀기(driver, '<선택자>', '위' | '아래' | '왼쪽' | '오른쪽'))
+  drag <ref|선택자> <ref|선택자>        앞 요소를 눌러 뒤 요소 가운데로 끌어 놓는다 (Ran: await 끌어놓기(driver, '<어디서>', '<어디로>'))
+  pinch-open | pinch-close <ref|선택자>   그 요소에서 두 손가락을 벌린다 · 오므린다 — 지도 · 사진 확대 축소 (Ran: await 벌리기 · 오므리기(driver, '<선택자>'))
+  tap-xy <x> <y>                     좌표를 누른다 — 눌러 보기만. 케이스에 옮길 Ran 줄을 내지 않는다(요소가 없는 자리는 케이스에서 보류다)
   back                               뒤로
   screenshot [ref|선택자] [--filename <파일>]   스크린샷 (ref · 선택자를 주면 그 요소만)
   info                               앱이 떠 있나 · 지금 화면 · 키보드 · 폰 기종 · 배터리
@@ -808,6 +813,67 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       }
       break;
     }
+    case 'swipe-in': {
+      const 방향 = 인자[1];
+      if (!밀방향인가(방향)) throw new Error('swipe-in 방향은 up · down · left · right 다 — swipe-in <ref|선택자> <방향>');
+      const { el, loc, 막힘 } = 대상(s, 인자[0]);
+      if (막힘 === null) {
+        // kit 요소안에서밀기 와 같은 요청 — Ran 줄을 옮기면 같은 일이 일어나야 한다
+        await 손짓(c, sid, 'mobile: swipeGesture', { elementId: await 찾는다(c, sid, loc!), direction: 방향, percent: 손동작정도 });
+        코드 = `await 요소안에서밀기(driver, ${따옴표(loc!)}, '${방향말[방향]}')`;
+      } else {
+        const 곳 = 상자(el!.bounds);
+        if (곳 === null) throw new Error(`${인자[0]} 의 위치를 모른다`);
+        await 손짓(c, sid, 'mobile: swipeGesture', { ...곳, direction: 방향, percent: 손동작정도 });
+        코드 = `// ${막힘} (요소 ${el!.bounds} 안에서 ${방향으로[방향]} 밀었다)`;
+      }
+      break;
+    }
+    case 'drag': {
+      if (인자[1] === undefined) throw new Error('drag 에 어디서 · 어디로 둘이 필요하다 — drag <ref|선택자> <ref|선택자>');
+      const 둘 = [대상(s, 인자[0]), 대상(s, 인자[1])] as const;
+      // 둘 다 주소가 있으면 kit 끌어놓기 와 같은 요청 — 끝점은 놓을 요소의 가운데
+      if (둘[0].막힘 === null && 둘[1].막힘 === null) {
+        const 집을 = await 찾는다(c, sid, 둘[0].loc!);
+        const 놓을 = (await 부른다(c, 'GET', `/session/${sid}/element/${await 찾는다(c, sid, 둘[1].loc!)}/rect`)) as { x: number; y: number; width: number; height: number };
+        await 손짓(c, sid, 'mobile: dragGesture', { elementId: 집을, endX: Math.round(놓을.x + 놓을.width / 2), endY: Math.round(놓을.y + 놓을.height / 2) });
+        코드 = `await 끌어놓기(driver, ${따옴표(둘[0].loc!)}, ${따옴표(둘[1].loc!)})`;
+      } else {
+        // 하나라도 주소가 없으면 화면 글의 자리로 끈다 — 케이스에는 못 옮긴다
+        const 점 = 둘.map((x, i) => {
+          const p = x.el === null ? null : center(x.el.bounds);
+          if (p === null) throw new Error(`${인자[i]} 의 위치를 모른다 — 주소 없는 ref 와 함께 끌 때는 둘 다 ref 로 준다`);
+          return p;
+        });
+        await 손짓(c, sid, 'mobile: dragGesture', { startX: 점[0]!.x, startY: 점[0]!.y, endX: 점[1]!.x, endY: 점[1]!.y });
+        코드 = `// ${둘[0].막힘 ?? 둘[1].막힘} (좌표 ${점[0]!.x},${점[0]!.y} 에서 ${점[1]!.x},${점[1]!.y} 로 끌었다)`;
+      }
+      break;
+    }
+    case 'pinch-open':
+    case 'pinch-close': {
+      const 벌림 = 명령 === 'pinch-open';
+      const script = 벌림 ? 'mobile: pinchOpenGesture' : 'mobile: pinchCloseGesture';
+      const { el, loc, 막힘 } = 대상(s, 인자[0]);
+      if (막힘 === null) {
+        await 손짓(c, sid, script, { elementId: await 찾는다(c, sid, loc!), percent: 손동작정도 });
+        코드 = `await ${벌림 ? '벌리기' : '오므리기'}(driver, ${따옴표(loc!)})`;
+      } else {
+        const 곳 = 상자(el!.bounds);
+        if (곳 === null) throw new Error(`${인자[0]} 의 위치를 모른다`);
+        await 손짓(c, sid, script, { ...곳, percent: 손동작정도 });
+        코드 = `// ${막힘} (요소 ${el!.bounds} 에서 두 손가락을 ${벌림 ? '벌렸다' : '오므렸다'})`;
+      }
+      break;
+    }
+    case 'tap-xy': {
+      if (!/^\d+$/.test(인자[0] ?? '') || !/^\d+$/.test(인자[1] ?? '')) throw new Error('tap-xy 는 0 이상의 정수 좌표 둘이다 — tap-xy <x> <y>');
+      const [x, y] = [Number(인자[0]), Number(인자[1])];
+      if (s.width > 0 && (x >= s.width || y >= s.height)) throw new Error(`좌표 ${x},${y} 가 화면(${s.width}×${s.height}) 밖이다`);
+      await 좌표를누른다(c, sid, x, y);
+      코드 = `// 좌표 누르기는 케이스에 옮기지 않는다 — 요소가 없는 자리는 케이스에서 보류다 (좌표 ${x},${y} 를 눌렀다)`;
+      break;
+    }
     case 'fill': {
       const 값 = 인자[1];
       if (값 === undefined) throw new Error('fill 에 넣을 값이 필요하다');
@@ -916,7 +982,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
   }
 
   // playwright-cli 처럼 액션마다 새 화면을 찍는다 — 화면이 바뀌면 이전 ref 는 쓸 수 없다
-  const 찍음 = await 찍는다(c, s, false, 앞화면, ['tap', 'click', 'long-press', 'double-tap'].includes(명령));
+  const 찍음 = await 찍는다(c, s, false, 앞화면, ['tap', 'click', 'long-press', 'double-tap', 'tap-xy'].includes(명령));
   await 적는다(파일, s);
   return `Ran: ${코드}\n${찍음}`;
 }

@@ -1,4 +1,4 @@
-// long-press · double-tap · wait · toast 의 몸 — cli.ts 는 인자를 읽고 여기를 부르기만 한다
+// long-press · double-tap · wait · toast · 요소 안 손동작의 몸 — cli.ts 는 인자를 읽고 여기를 부르기만 한다
 
 import { 가라앉기, 부른다, 화면을기다린다, type 연결 } from './appium.js';
 import { 잠깐뜬글 } from './crawl-motion.js';
@@ -51,6 +51,26 @@ export async function 기다린다(c: 연결, sid: string, 라벨: string, 맞�
     await 쉰다(가라앉기.간격_ms);
   }
 }
+
+/** kit 손동작 부품(요소안에서밀기 · 벌리기 · 오므리기)과 같은 정도 — Ran 줄을 옮기면 같은 길이로 움직인다 */
+export const 손동작정도 = 0.75;
+
+export const 밀방향들 = ['up', 'down', 'left', 'right'] as const;
+export type 밀방향 = (typeof 밀방향들)[number];
+export const 밀방향인가 = (x: string | undefined): x is 밀방향 => (밀방향들 as readonly string[]).includes(x ?? '');
+/** kit `요소안에서밀기` 의 방향 이름 */
+export const 방향말: Record<밀방향, string> = { up: '위', down: '아래', left: '왼쪽', right: '오른쪽' };
+export const 방향으로: Record<밀방향, string> = { up: '위로', down: '아래로', left: '왼쪽으로', right: '오른쪽으로' };
+
+/** `[x1,y1][x2,y2]` 를 mobile: 손짓이 받는 상자로 */
+export function 상자(bounds: string): { left: number; top: number; width: number; height: number } | null {
+  const n = /\[(\d+),(\d+)\]\[(\d+),(\d+)\]/.exec(bounds)?.slice(1).map(Number);
+  if (n === undefined || n[2]! <= n[0]! || n[3]! <= n[1]!) return null;
+  return { left: n[0]!, top: n[1]!, width: n[2]! - n[0]!, height: n[3]! - n[1]! };
+}
+
+/** UiAutomator2 `mobile:` 손짓 하나 — kit 부품이 driver.execute 로 보내는 것과 같은 요청이다 */
+export const 손짓 = (c: 연결, sid: string, script: string, arg: Record<string, unknown>): Promise<unknown> => 부른다(c, 'POST', `/session/${sid}/execute/sync`, { script, args: [arg] });
 
 export const 토스트줄 = (글: string): string => `Toast: 「${글}」`;
 

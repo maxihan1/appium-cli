@@ -355,6 +355,79 @@ describe('그 밖의 명령', () => {
   });
 });
 
+describe('swipe-in · drag · pinch-open · pinch-close · tap-xy', () => {
+  const 손짓들 = (): { script: string; args: Record<string, unknown>[] }[] =>
+    (fetchMock.mock.calls as [string, RequestInit][]).filter(([u]) => u.endsWith('/execute/sync')).map(([, init]) => JSON.parse(init.body as string));
+  const 첫줄 = (out: string): string => out.split('\n')[0]!;
+
+  it('swipe-in 은 찾은 요소 안에서 kit 요소안에서밀기 와 같은 swipeGesture 를 보내고, 주소 없는 ref 는 그 요소 상자 안에서 민다', async () => {
+    const out = await run(['-s=probe', 'swipe-in', 'e3', 'left'], env);
+    expect(손짓들()).toEqual([{ script: 'mobile: swipeGesture', args: [{ elementId: 'el-9', direction: 'left', percent: 0.75 }] }]);
+    expect(첫줄(out)).toBe("Ran: await 요소안에서밀기(driver, '~로그인 > 시작', '왼쪽')");
+
+    fetchMock.mockClear();
+    const 상자 = await run(['-s=probe', 'swipe-in', 'e2', 'down'], env);
+    expect(손짓들()[0]!.args[0]).toEqual({ left: 10, top: 20, width: 20, height: 20, direction: 'down', percent: 0.75 });
+    expect(첫줄(상자)).toBe('Ran: // 주소 없음 — desc 도 id 도 없다. text= 로 찾지 않는다 (요소 [10,20][30,40] 안에서 아래로 밀었다)');
+  });
+
+  it('swipe-in 은 방향이 틀리거나 없는 ref 면 밀지 않고 던진다', async () => {
+    await expect(run(['-s=probe', 'swipe-in', 'e3', 'sideways'], env)).rejects.toThrow('swipe-in 방향은 up · down · left · right 다');
+    await expect(run(['-s=probe', 'swipe-in', 'e3'], env)).rejects.toThrow('swipe-in 방향은');
+    await expect(run(['-s=probe', 'swipe-in', 'e99', 'up'], env)).rejects.toThrow('ref e99 가 마지막 화면에 없다');
+    expect(손짓들()).toEqual([]);
+  });
+
+  it('drag 는 두 요소를 찾아 놓을 요소의 가운데로 dragGesture 를 보내고 끌어놓기 코드를 준다', async () => {
+    const 기본 = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) => (url.endsWith('/rect') ? 답({ x: 100, y: 200, width: 50, height: 61 }) : 기본(url, init)));
+
+    const out = await run(['-s=probe', 'drag', 'e3', 'id=com.shop:id/pw'], env);
+    expect(손짓들()).toEqual([{ script: 'mobile: dragGesture', args: [{ elementId: 'el-9', endX: 125, endY: 231 }] }]);
+    expect(첫줄(out)).toBe("Ran: await 끌어놓기(driver, '~로그인 > 시작', 'id=com.shop:id/pw')");
+  });
+
+  it('drag 는 주소 없는 ref 가 끼면 두 ref 의 가운데 좌표로 끌고 좌표 주석을 준다 — 선택자와 섞이면 던진다', async () => {
+    const out = await run(['-s=probe', 'drag', 'e2', 'e3'], env);
+    expect(손짓들()[0]!.args[0]).toEqual({ startX: 20, startY: 30, endX: 20, endY: 60 });
+    expect(첫줄(out)).toBe('Ran: // 주소 없음 — desc 도 id 도 없다. text= 로 찾지 않는다 (좌표 20,30 에서 20,60 로 끌었다)');
+
+    fetchMock.mockClear();
+    await expect(run(['-s=probe', 'drag', '~로그인 > 시작', 'e2'], env)).rejects.toThrow('둘 다 ref 로 준다');
+    await expect(run(['-s=probe', 'drag', 'e3'], env)).rejects.toThrow('drag 에 어디서 · 어디로 둘이 필요하다');
+    expect(손짓들()).toEqual([]);
+  });
+
+  it('pinch-open · pinch-close 는 찾은 요소에서 벌리기 · 오므리기와 같은 손짓을 보내고, 주소 없는 ref 는 상자로 보낸다', async () => {
+    const 벌림 = await run(['-s=probe', 'pinch-open', 'e3'], env);
+    expect(손짓들()).toEqual([{ script: 'mobile: pinchOpenGesture', args: [{ elementId: 'el-9', percent: 0.75 }] }]);
+    expect(첫줄(벌림)).toBe("Ran: await 벌리기(driver, '~로그인 > 시작')");
+
+    fetchMock.mockClear();
+    expect(첫줄(await run(['-s=probe', 'pinch-close', '~로그인 > 시작'], env))).toBe("Ran: await 오므리기(driver, '~로그인 > 시작')");
+    expect(손짓들()[0]!.script).toBe('mobile: pinchCloseGesture');
+
+    fetchMock.mockClear();
+    const 상자 = await run(['-s=probe', 'pinch-close', 'e2'], env);
+    expect(손짓들()[0]!.args[0]).toEqual({ left: 10, top: 20, width: 20, height: 20, percent: 0.75 });
+    expect(첫줄(상자)).toContain('(요소 [10,20][30,40] 에서 두 손가락을 오므렸다)');
+  });
+
+  it('tap-xy 는 좌표를 누르기만 하고 케이스에 옮길 코드 없이 주석만 준다 — 화면 밖 · 틀린 좌표는 던진다', async () => {
+    const out = await run(['-s=probe', 'tap-xy', '500', '600'], env);
+    const [, init] = (fetchMock.mock.calls as [string, RequestInit][]).find(([u]) => u.endsWith('/actions'))!;
+    expect(JSON.parse(init.body as string).actions[0].actions[0]).toEqual({ type: 'pointerMove', duration: 0, x: 500, y: 600 });
+    expect(첫줄(out)).toBe('Ran: // 좌표 누르기는 케이스에 옮기지 않는다 — 요소가 없는 자리는 케이스에서 보류다 (좌표 500,600 를 눌렀다)');
+
+    fetchMock.mockClear();
+    await expect(run(['-s=probe', 'tap-xy', '1080', '10'], env)).rejects.toThrow('좌표 1080,10 가 화면(1080×2400) 밖이다');
+    for (const 틀림 of [['x', '5'], ['1.5', '5'], ['5']]) {
+      await expect(run(['-s=probe', 'tap-xy', ...틀림], env)).rejects.toThrow('tap-xy 는 0 이상의 정수 좌표 둘이다');
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
 describe('long-press · double-tap · wait · toast', () => {
   const 토스트XML = 화면XML.replace(
     '</hierarchy>',
