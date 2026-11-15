@@ -439,6 +439,67 @@ describe('swipe-in · drag · pinch-open · pinch-close · tap-xy', () => {
   });
 });
 
+describe('clear · press · type · clipboard', () => {
+  const 보낸 = (): { script: string; args: Record<string, unknown>[] }[] =>
+    (fetchMock.mock.calls as [string, RequestInit][]).filter(([u]) => u.endsWith('/execute/sync')).map(([, init]) => JSON.parse(init.body as string));
+  const 첫줄 = (out: string): string => out.split('\n')[0]!;
+  const 답바꿈 = (script: string, value: unknown): void => {
+    const 기본 = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) => (url.endsWith('/execute/sync') && String(init.body).includes(script) ? 답(value) : 기본(url, init)));
+  };
+
+  it('clear 는 찾은 칸을 비우고 칸비우기 코드를 준다 — 주소 없는 칸은 눌러 포커스를 준 뒤 비운다', async () => {
+    const out = await run(['-s=probe', 'clear', 'id=com.shop:id/pw'], env);
+    expect(부른길()).toContain('POST /session/s-1/element/el-9/clear');
+    expect(부른길()).not.toContain('POST /session/s-1/element/el-9/value');
+    expect(첫줄(out)).toBe("Ran: await 칸비우기(await driver.$('id=com.shop:id/pw').getElement())");
+
+    const 기본 = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) => (url.endsWith('/element/active') ? 답({ 'element-6066-11e4-a52e-4f735466cecf': 'el-7' }) : 기본(url, init)));
+    fetchMock.mockClear();
+    const 좌표 = await run(['-s=probe', 'clear', 'e2'], env);
+    expect(부른길().filter((p) => !p.endsWith('/source'))).toEqual(['POST /session/s-1/actions', 'GET /session/s-1/element/active', 'POST /session/s-1/element/el-7/clear']);
+    expect(첫줄(좌표)).toBe('Ran: // 주소 없음 — desc 도 id 도 없다. text= 로 찾지 않는다 (좌표 20,30 칸을 비웠다)');
+    await expect(run(['-s=probe', 'clear', 'e4', '--submit'], env)).rejects.toThrow('clear 는 --submit 을 받지 않는다');
+  });
+
+  it('press 는 키 이름을 keycode 로 바꿔 pressKey 를 보내고 키누르기 코드를 준다 — 모르는 키는 보내지 않는다', async () => {
+    const 키들 = { home: ['홈', 3], recent: ['최근 앱', 187], delete: ['지우기', 67], tab: ['탭', 61], paste: ['붙여 넣기', 279] } as const;
+    for (const [키, [이름, keycode]] of Object.entries(키들)) {
+      fetchMock.mockClear();
+      const out = await run(['-s=probe', 'press', 키], env);
+      expect(보낸()).toEqual([{ script: 'mobile: pressKey', args: [{ keycode }] }]);
+      expect(첫줄(out)).toBe(`Ran: await 키누르기(driver, '${이름}')`);
+    }
+    fetchMock.mockClear();
+    for (const 틀림 of [['enter'], ['constructor'], []]) {
+      await expect(run(['-s=probe', 'press', ...틀림], env)).rejects.toThrow('press 키는 home · recent · delete · tab · paste 다 — 키보드 완료는 fill --submit, 뒤로는 back');
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('type 은 포커스 칸에 mobile: type 으로 치고 포커스칸에치기 코드를 준다 — 폰이 안 받으면 던진다', async () => {
+    const out = await run(['-s=probe', 'type', "12'34"], env);
+    expect(보낸()).toEqual([{ script: 'mobile: type', args: [{ text: "12'34" }] }]);
+    expect(첫줄(out)).toBe("Ran: await 포커스칸에치기(driver, '12\\'34')");
+
+    await expect(run(['-s=probe', 'type'], env)).rejects.toThrow('type 에 칠 글이 필요하다');
+    답바꿈('mobile: type', false);
+    await expect(run(['-s=probe', 'type', '1234'], env)).rejects.toThrow('폰이 글을 받지 않았다');
+  });
+
+  it('clipboard 는 읽은 base64 를 글로 풀어 주고, write 는 base64 로 보낸다 — 화면은 안 찍는다', async () => {
+    답바꿈('mobile: getClipboard', Buffer.from('쿠폰 A1', 'utf8').toString('base64'));
+    expect(await run(['-s=probe', 'clipboard'], env)).toBe('Ran: await 클립보드읽기(driver)\nClipboard: 「쿠폰 A1」');
+
+    fetchMock.mockClear();
+    expect(await run(['-s=probe', 'clipboard', 'write', '쿠폰 A1'], env)).toBe("Ran: await 클립보드쓰기(driver, '쿠폰 A1')");
+    expect(보낸()).toEqual([{ script: 'mobile: setClipboard', args: [{ content: Buffer.from('쿠폰 A1', 'utf8').toString('base64'), contentType: 'plaintext' }] }]);
+    expect(부른길().some((p) => p.endsWith('/source'))).toBe(false);
+    await expect(run(['-s=probe', 'clipboard', 'write'], env)).rejects.toThrow('clipboard 는 인자 없이(읽기) · write <글> 이다');
+  });
+});
+
 describe('long-press · double-tap · wait · toast', () => {
   const 토스트XML = 화면XML.replace(
     '</hierarchy>',

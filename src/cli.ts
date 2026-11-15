@@ -10,6 +10,7 @@ import { crawl, 본다 } from './crawl.js';
 import { 결과파일들, 상태인가, 저장본모양 } from './crawl-out.js';
 import { 기다린다, 길게기본_ms, 길게누른다, 두번누른다, 맞추기, 밀방향인가, 방향말, 방향으로, 상자, 손동작정도, 손짓, 양의정수, 토스트를본다, 토스트줄 } from './gesture.js';
 import { 굴려찾기선택자, 먼저뜬다, 보인다, 세어본다, 셈줄, 조회한다 } from './find.js';
+import { 키인가, 폰키 } from './input.js';
 import { apiLines } from './logcat.js';
 import { 권한목록, 권한바꾼다, 권한이름, 권한창답, 권한창알림, 앞앱줄 } from './system.js';
 import { ref로찾는다, 네이티브명령, 맥락들, 웹ref인가, 웹모두찾는다, 웹세어본다, 웹을읽는다, 웹이가라앉을때까지, 웹주소, 웹w3c } from './web.js';
@@ -62,6 +63,12 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
   scroll-to <글자>                     굴릴 수 있는 첫 목록을 그 글자가 보일 때까지 굴린다 (Ran: await 스크롤해서찾기(driver, '<글자>'))
   toast [--timeout 5000]             지금부터 그 시간 동안 화면을 읽어 Toast · 스낵바 글을 Toast: 「글」 한 줄씩 낸다 — 못 봤으면 종료 코드 1 (누른 바로 뒤에 부른다)
   fill <ref|선택자> <값> [--submit]     입력한다 (--submit 이면 넣은 뒤 키보드 완료(IME done)를 보낸다)
+  clear <ref|선택자>                   칸을 비운다 (Ran: await 칸비우기(await driver.$('<선택자>').getElement()))
+  press home|recent|delete|tab|paste   폰 키를 누른다 — 홈 · 최근 앱 · 지우기 · 탭 · 붙여 넣기 (Ran: await 키누르기(driver, '홈'))
+                                     키보드 완료는 fill --submit, 뒤로는 back
+  type <글>                           포커스가 있는 칸에 키를 하나씩 친다 — 인증번호 여섯 칸 · 앱이 그린 키패드 (Ran: await 포커스칸에치기(driver, '<글>'))
+                                     칸을 먼저 tap 한다
+  clipboard [write <글>]              클립보드를 읽는다 · 쓴다 (Ran: await 클립보드읽기(driver) · 클립보드쓰기(driver, '<글>')). 붙여 넣기는 press paste
   hide-keyboard                      키보드를 내린다 (아래 버튼을 가릴 때)
   swipe up|down|left|right           손가락을 그 방향으로 민다 (화면 전체)
   swipe-in <ref|선택자> up|down|left|right   그 요소 안에서만 민다 — 가로 상품 줄 · 밀어서 삭제 · 아래 시트 · 슬라이더 · 날짜 고르개
@@ -91,7 +98,7 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
   context <이름>                       그 맥락으로 바꾸고 화면을 찍는다 (WEBVIEW_… 이면 웹 화면 · NATIVE_APP 이면 돌아온다). 붙은 session 은 --force
                                      웹 화면 줄은 [ref=wN] 이고 선택자는 웹 케이스 순서의 WebdriverIO 꼴이다
                                      ('[data-testid="…"]' · 'aria/이름' · 'input[placeholder="…"]' · 'button=글' · CSS · XPath)
-                                     웹 맥락에서 쓰는 것: snapshot · find · tap · fill · wait · visible · count · generate-locator · screenshot · back · info · logs · settings · record · close
+                                     웹 맥락에서 쓰는 것: snapshot · find · tap · fill · clear · clipboard · wait · visible · count · generate-locator · screenshot · back · info · logs · settings · record · close
   close                              session 을 닫는다 (번호를 남겨 artifacts 가 쓴다)
   list                               열린 session 목록
   logs [--grep <식>] [--api]          logcat 새 줄 (첫 호출은 쌓인 줄을 버린다) · --api 면 API 줄만 METHOD URL
@@ -643,6 +650,18 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
     }
     case 'info':
       return 조회한다(c, sid, s.앱?.appPackage);
+    case 'clipboard': {
+      // 화면을 안 바꿔 찍지 않는다. 팜은 폰을 돌려받을 때 클립보드를 비운다
+      const [할일, 글] = 인자;
+      const 실행 = (script: string, arg: Record<string, unknown>): Promise<unknown> => 부른다(c, 'POST', `/session/${sid}/execute/sync`, { script, args: [arg] });
+      if (할일 === undefined) {
+        const 읽은 = Buffer.from(String((await 실행('mobile: getClipboard', {})) ?? ''), 'base64').toString('utf8');
+        return `Ran: await 클립보드읽기(driver)\nClipboard: 「${읽은}」`;
+      }
+      if (할일 !== 'write' || 글 === undefined) throw new Error('clipboard 는 인자 없이(읽기) · write <글> 이다 — 붙여 넣기는 press paste');
+      await 실행('mobile: setClipboard', { content: Buffer.from(글, 'utf8').toString('base64'), contentType: 'plaintext' });
+      return `Ran: await 클립보드쓰기(driver, ${따옴표(글)})`;
+    }
     case 'permission': {
       // 시험 대상 앱의 것만 — 앞에 온 다른 앱(current_package)의 권한을 바꾸지 않게 꾸러미를 지금 화면에서 읽지 않는다
       const 꾸러미 = s.앱?.appPackage;
@@ -874,24 +893,29 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       코드 = `// 좌표 누르기는 케이스에 옮기지 않는다 — 요소가 없는 자리는 케이스에서 보류다 (좌표 ${x},${y} 를 눌렀다)`;
       break;
     }
-    case 'fill': {
+    case 'fill':
+    case 'clear': {
+      // clear 는 넣지 않고 비우기만 한다 — kit 칸비우기(clearValue)와 같은 요청
+      const 비움 = 명령 === 'clear';
       const 값 = 인자[1];
-      if (값 === undefined) throw new Error('fill 에 넣을 값이 필요하다');
+      if (!비움 && 값 === undefined) throw new Error('fill 에 넣을 값이 필요하다');
+      if (비움 && values.submit === true) throw new Error('clear 는 --submit 을 받지 않는다');
+      const 비우기코드 = (loc: string): string => `await 칸비우기(await driver.$(${따옴표(loc)}).getElement())`;
       if (s.맥락 !== undefined) {
         // 키보드 완료는 네이티브 명령이다 — 웹 케이스처럼 단추를 누른다
         if (values.submit === true) throw new Error('웹 맥락에서는 --submit 을 못 쓴다 — 보내기 단추를 tap 한다');
         const { id, loc, 까닭 } = await 웹대상(c, sid, 인자[0]);
         // WebdriverIO setValue 처럼 비우고 넣는다 — Ran 줄을 옮기면 같은 일이 일어나야 한다
         await 부른다(c, 'POST', `/session/${sid}/element/${id}/clear`, {});
-        await 부른다(c, 'POST', `/session/${sid}/element/${id}/value`, { text: 값 });
-        코드 = loc === null ? `// ${까닭 ?? '주소 없음'} (ref 칸에 넣었다)` : `await driver.$(${따옴표(loc)}).setValue(${따옴표(값)})`;
+        if (!비움) await 부른다(c, 'POST', `/session/${sid}/element/${id}/value`, { text: 값 });
+        코드 = loc === null ? `// ${까닭 ?? '주소 없음'} (ref 칸${비움 ? '을 비웠다' : '에 넣었다'})` : 비움 ? 비우기코드(loc) : `await driver.$(${따옴표(loc)}).setValue(${따옴표(값!)})`;
         break;
       }
       const { el, loc, 막힘 } = 대상(s, 인자[0]);
       let id: string;
       if (막힘 === null) {
         id = await 찾는다(c, sid, loc!);
-        코드 = `await driver.$(${따옴표(loc!)}).setValue(${따옴표(값)})`;
+        코드 = 비움 ? 비우기코드(loc!) : `await driver.$(${따옴표(loc!)}).setValue(${따옴표(값!)})`;
       } else {
         const p = center(el!.bounds);
         if (p === null) throw new Error(`${인자[0]} 의 위치를 모른다`);
@@ -901,7 +925,11 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
           async () => Object.values((await 부른다(c, 'GET', `/session/${sid}/element/active`)) as Record<string, string>)[0]!,
           `좌표 ${p.x},${p.y} 를 누른 뒤 입력칸이 안 잡혔다`,
         );
-        코드 = `// ${막힘} (좌표 ${p.x},${p.y} 칸에 넣었다)`;
+        코드 = `// ${막힘} (좌표 ${p.x},${p.y} 칸${비움 ? '을 비웠다' : '에 넣었다'})`;
+      }
+      if (비움) {
+        await 부른다(c, 'POST', `/session/${sid}/element/${id}/clear`, {});
+        break;
       }
       await 부른다(c, 'POST', `/session/${sid}/element/${id}/value`, { text: 값 });
       // playwright-cli fill --submit(Enter) 자리 — Android 는 키보드의 완료 동작. Appium Settings IME 로 잠깐 바꿔 지금 포커스 칸에 보낸다
@@ -917,6 +945,23 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       if (!밀방향인가(방향)) throw new Error('swipe 방향은 up · down · left · right 다');
       await 손짓(c, sid, 'mobile: swipeGesture', { left: s.width * 0.1, top: s.height * 0.2, width: s.width * 0.8, height: s.height * 0.6, direction: 방향, percent: 손동작정도 });
       코드 = `await driver.swipe({ direction: ${따옴표(방향)} })`;
+      break;
+    }
+    case 'press': {
+      const 키 = 인자[0];
+      if (!키인가(키)) throw new Error(`press 키는 ${Object.keys(폰키).join(' · ')} 다 — 키보드 완료는 fill --submit, 뒤로는 back`);
+      // kit 키누르기 와 같은 요청 — Ran 줄을 옮기면 같은 일이 일어나야 한다
+      await 부른다(c, 'POST', `/session/${sid}/execute/sync`, { script: 'mobile: pressKey', args: [{ keycode: 폰키[키].keycode }] });
+      코드 = `await 키누르기(driver, '${폰키[키].이름}')`;
+      break;
+    }
+    case 'type': {
+      const 글 = 인자[0];
+      if (글 === undefined || 글 === '') throw new Error('type 에 칠 글이 필요하다 — 칸을 먼저 tap 해서 포커스를 준다');
+      // 포커스가 있는 칸에 키를 하나씩 친다 — 인증번호 여섯 칸처럼 칠 때마다 다음 칸으로 넘어가는 화면도 받는다
+      const 됨 = await 부른다(c, 'POST', `/session/${sid}/execute/sync`, { script: 'mobile: type', args: [{ text: 글 }] });
+      if (됨 === false) throw new Error('폰이 글을 받지 않았다 — 칸을 먼저 tap 해서 포커스를 준다(snapshot 의 포커스 줄)');
+      코드 = `await 포커스칸에치기(driver, ${따옴표(글)})`;
       break;
     }
     case 'hide-keyboard': {
