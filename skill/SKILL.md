@@ -17,7 +17,7 @@ npx appium-cli -s=probe find --regex "로그인|가입"   # 마지막 화면에�
 npx appium-cli -s=probe tap e3                    # 누른다 → Ran: 코드 한 줄 + 새 화면 경로
 npx appium-cli -s=probe tap '~로그인'              # ref 대신 선택자(~desc · id=…)도 된다 — 지금 화면에서 찾는다
 npx appium-cli -s=probe long-press e3             # 길게 누른다 (--ms 1200 — 케이스와 같은 longClickGesture) → Ran: await 길게누르기(driver, '~로그인')
-npx appium-cli -s=probe double-tap e3             # 짧게 두 번 → Ran: await 두번누르기(driver.$('~로그인'))
+npx appium-cli -s=probe double-tap e3             # 짧게 두 번 → Ran: await 두번누르기(await driver.$('~로그인').getElement())
 npx appium-cli -s=probe wait '~저장됨'              # 뜰 때까지 (--gone 이면 사라질 때까지 · --timeout 10000) → Ran: await 뜰때까지(driver, '~저장됨') · Waited: Nms · 새 화면. 못 되면 종료 코드 1
 npx appium-cli -s=probe wait --text '저장됨'        # 글자를 가진 요소를 기다린다 (Ran 줄 없음)
 npx appium-cli -s=probe toast                     # 누른 바로 뒤에 — 그 뒤 5초(--timeout) 동안 본 Toast · 스낵바 글을 Toast: 「글」 한 줄씩. 못 봤으면 종료 코드 1

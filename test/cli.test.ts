@@ -421,7 +421,7 @@ describe('long-press · double-tap · wait · toast', () => {
     const out = await run(['-s=probe', 'double-tap', 'e3'], env);
 
     expect(부른길().filter((p) => p.endsWith('/click'))).toHaveLength(2);
-    expect(out.split('\n')[0]).toBe("Ran: await 두번누르기(driver.$('~로그인 > 시작'))");
+    expect(out.split('\n')[0]).toBe("Ran: await 두번누르기(await driver.$('~로그인 > 시작').getElement())");
 
     fetchMock.mockClear();
     const 좌표 = await run(['-s=probe', 'double-tap', 'e2'], env);
@@ -459,12 +459,13 @@ describe('long-press · double-tap · wait · toast', () => {
     expect(out.split('\n')[2]).toMatch(/^- Snapshot: /);
   });
 
-  it('wait --text 는 Ran 줄 없이 글자를 가진 요소를 기다리고, id 는 꾸러미 없는 이름도 맞춘다', async () => {
+  it('wait --text 는 Ran 줄 없이 글자를 가진 요소를 기다리고, id 는 글자 그대로만 맞춘다 — 짧은 이름은 케이스에서 못 찾는다', async () => {
     const 글 = await run(['-s=probe', 'wait', '--text', 'Jerry'], env);
-    const 이름 = await run(['-s=probe', 'wait', 'id=pw'], env);
+    const 이름 = await run(['-s=probe', 'wait', 'id=com.shop:id/pw'], env);
 
     expect(글.split('\n')[0]).toMatch(/^Waited: \d+ms$/);
-    expect(이름.split('\n')[0]).toBe("Ran: await 뜰때까지(driver, 'id=pw')");
+    expect(이름.split('\n')[0]).toBe("Ran: await 뜰때까지(driver, 'id=com.shop:id/pw')");
+    await expect(run(['-s=probe', 'wait', 'id=pw', '--timeout', '1'], env)).rejects.toThrow('뜨지 않았다');
   });
 
   it('wait --gone 은 사라질 때까지 기다리고 사라짐 코드를 준다', async () => {
