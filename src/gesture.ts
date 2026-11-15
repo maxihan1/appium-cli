@@ -4,7 +4,7 @@ import { 가라앉기, 부른다, 화면을기다린다, type 연결 } from './a
 import { 잠깐뜬글 } from './crawl-motion.js';
 import type { 요소, 화면 } from './platform/android.js';
 
-const 쉰다 = (ms: number): Promise<void> => new Promise((ok) => setTimeout(ok, ms));
+export const 쉰다 = (ms: number): Promise<void> => new Promise((ok) => setTimeout(ok, ms));
 
 /** kit `길게누르기` 의 기본 누르는 시간과 같다 */
 export const 길게기본_ms = 1200;

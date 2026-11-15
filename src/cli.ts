@@ -131,6 +131,8 @@ function 스크립트읽기(글: string): string[][] {
     if (낱.length === 0 || 낱[0]!.startsWith('#')) return [];
     if (!스크립트명령.has(낱[0]!)) throw new Error(`로그인 스크립트 ${i + 1}줄: ${낱[0]} 은 못 쓴다 — tap · fill · back · swipe · hide-keyboard 만`);
     if (['tap', 'click', 'fill'].includes(낱[0]!) && !선택자인가(낱[1])) throw new Error(`로그인 스크립트 ${i + 1}줄: ref 대신 선택자('~desc' · 'id=…' · 'android=…')를 쓴다`);
+    // 따옴표 없는 UiSelector 는 빈칸에서 잘린다 — 잘린 앞조각도 android= 로 시작해 위를 지나간다
+    if (낱[1]?.startsWith('android=') === true && !낱[1].endsWith(')')) throw new Error(`로그인 스크립트 ${i + 1}줄: android= 선택자는 따옴표로 묶는다`);
     return [낱];
   });
   if (줄들.length === 0) throw new Error('로그인 스크립트가 비었다');
@@ -490,13 +492,15 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       return 본.map(토스트줄).join('\n');
     }
     case 'wait-any': {
-      if (인자.length < 2 || !인자.every(선택자인가)) throw new Error("wait-any 에는 선택자('~desc' · 'id=…' · 'android=…')가 둘 이상 필요하다");
+      // 같은 후보가 둘이면 Ran 줄의 객체 열쇠가 겹친다
+      const 후보들 = [...new Set(인자)];
+      if (후보들.length < 2 || !후보들.every(선택자인가)) throw new Error("wait-any 에는 서로 다른 선택자('~desc' · 'id=…' · 'android=…')가 둘 이상 필요하다");
       const 제한 = 양의정수(values.timeout, 30_000, '--timeout');
-      const 뜬 = await 먼저뜬다(c, sid, 인자, 제한);
+      const 뜬 = await 먼저뜬다(c, sid, 후보들, 제한);
       const 찍음 = await 찍는다(c, s, false);
       await 적는다(파일, s);
       // 열쇠는 선택자 그대로 낸다 — 케이스에서는 화면 이름으로 바꿔 쓴다
-      const 후보 = 인자.map((x) => `${따옴표(x)}: ${따옴표(x)}`).join(', ');
+      const 후보 = 후보들.map((x) => `${따옴표(x)}: ${따옴표(x)}`).join(', ');
       return `Ran: await 먼저뜨는것(driver, { ${후보} }${제한 === 30_000 ? '' : `, ${제한}`})\nFound: ${뜬}\n${찍음}`;
     }
     case 'count': {

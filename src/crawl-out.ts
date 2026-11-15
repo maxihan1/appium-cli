@@ -22,7 +22,7 @@ export function 기록글(key: string, h: 화면): string {
   return [`# ${key}`, ...칸, h.글, ''].join('\n');
 }
 
-/** 글자 지문 — test_platform `글자지문`(authoring-crawl-rules.ts)과 같다. 본문 숫자(좌표 · ref 번호 · 개수)는 0 으로, `#` 머리 줄은 숫자까지 본다. 본문의 선택됨 · 포커스 칸은 뺀다(상태칸뺌) */
+/** 글자 지문 — test_platform `글자지문`(authoring-crawl-rules.ts)에 더해 본문의 선택됨 · 포커스 칸을 뺀다(상태칸뺌 — 그쪽 웹 화면 글에는 이 칸이 없다). 본문 숫자(좌표 · ref 번호 · 개수)는 0 으로, `#` 머리 줄은 숫자까지 본다. test_platform 은 앱 화면의 이 값을 다시 셈하지 않고 받은 값을 견준다 */
 export function 글자지문(파일글: string): string {
   const 정리 = 파일글
     .split('\n')

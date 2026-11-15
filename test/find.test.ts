@@ -199,6 +199,43 @@ describe('info · settings · 요소 사진', () => {
   });
 });
 
+describe('리뷰 뒤 고친 것', () => {
+  it('찾은 뒤 낡은 요소라 displayed 가 던지면 visible 은 아니오로 본다', async () => {
+    찾은 = [요소('el-1')];
+    fetchMock.mockImplementation(async (url: string) =>
+      url.endsWith('/displayed') ? 답({ error: 'stale element reference', message: '낡았다' }, 404) : url.endsWith('/elements') ? 답(찾은) : 답(화면XML),
+    );
+    expect((await run(['-s=probe', 'visible', '~로그인'], env)).split('\n')[1]).toBe('Visible: 아니오');
+  });
+
+  it('count 가 꾸러미 없는 id 를 못 찾으면 Compose 알림을 붙인다', async () => {
+    expect((await run(['-s=probe', 'count', 'id=login_id'], env)).split('\n')[1]).toContain('disableIdLocatorAutocompletion');
+  });
+
+  it('배터리 -1 은 모름, wait-any 의 같은 후보는 하나로 센다', async () => {
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
+      const script = init.body === undefined ? '' : (JSON.parse(String(init.body)) as { script?: string }).script;
+      return 답(script === 'mobile: batteryInfo' ? { level: -1, state: 1 } : url.endsWith('/source') ? 화면XML : 'x');
+    });
+    expect((await run(['-s=probe', 'info'], env)).split('\n')[4]).toBe('배터리: 모름 · 모름');
+    가짜();
+    await expect(run(['-s=probe', 'wait-any', '~a', '~a'], env)).rejects.toThrow('서로 다른');
+  });
+
+  it('선택됨 · 포커스만 바뀐 화면은 바뀐 것으로 안 보고 내용이 바뀔 때까지 기다린다', async () => {
+    Object.assign(가라앉기, { 최대_ms: 2000 });
+    const 탭 = (선택: boolean, 글: string): string =>
+      `<hierarchy width="100" height="100"><android.widget.TextView text="홈" clickable="true" selected="${선택}" bounds="[0,0][10,10]" resource-id="tab" content-desc="" /><android.widget.TextView text="${글}" bounds="[0,20][10,30]" resource-id="body" content-desc="" /></hierarchy>`;
+    const 차례 = [탭(false, '앞'), 탭(true, '앞'), 탭(true, '앞'), 탭(true, '뒤'), 탭(true, '뒤')];
+    let n = 0;
+    fetchMock.mockImplementation(async (url: string) => 답(url.endsWith('/source') ? 차례[Math.min(n++, 차례.length - 1)] : 요소('el-1')));
+    await run(['-s=probe', 'snapshot'], env);
+    const 파일 = (await run(['-s=probe', 'tap', '~홈'], env)).split('- Snapshot: ')[1]!;
+    const { readFileSync } = await import('node:fs');
+    expect(readFileSync(파일.trim(), 'utf8')).toContain('text="뒤"');
+  });
+});
+
 describe('화면 줄의 선택됨 · 포커스', () => {
   const xml = (선택: boolean, 포커스: boolean): string =>
     `<hierarchy width="100" height="100"><android.widget.TextView text="홈" clickable="true" selected="${선택}" focused="${포커스}" bounds="[0,0][10,10]" resource-id="tab_home" content-desc="" /></hierarchy>`;

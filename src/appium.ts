@@ -4,7 +4,7 @@ import { mkdir, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { 잠깐뜬글 } from './crawl-motion.js';
-import { parseSource, type 화면 } from './platform/android.js';
+import { parseSource, 상태칸뺌, type 화면 } from './platform/android.js';
 
 export interface 연결 {
   base: string;
@@ -51,10 +51,13 @@ export async function 부른다(c: 연결, method: string, path: string, body?: 
 
 const ELEMENT = 'element-6066-11e4-a5ab-c8d2b5b44a87';
 
+/** W3C 요소 답에서 번호를 꺼낸다 — 옛 JSONWP 꼴(ELEMENT)도 받는다 */
+export const 요소번호 = (v: Record<string, string>): string => v[ELEMENT] ?? v.ELEMENT!;
+
 export async function 요소를찾는다(c: 연결, sid: string, using: string, value: string): Promise<string> {
   try {
     const v = (await 부른다(c, 'POST', `/session/${sid}/element`, { using, value })) as Record<string, string>;
-    return v[ELEMENT] ?? v.ELEMENT!;
+    return 요소번호(v);
   } catch (e) {
     // Compose testTag id(`login_id`)는 UiAutomator2 가 꾸러미를 붙여(`<pkg>:id/login_id`) 찾아서 못 찾는다 — 실측 데모마켓(F6-05)
     if (using === 'id' && !value.includes(':') && e instanceof Error) e.message += ' — 꾸러미 없는 id(Compose testTag)는 open 에 --cap appium:disableIdLocatorAutocompletion=true 가 있어야 찾힌다';
@@ -89,7 +92,9 @@ export async function 화면을기다린다(c: 연결, sid: string, 앞?: string
   if (앞 === undefined) return 화면;
   // 움직임은 crawl 과 누르기(tap · long-press · double-tap 의 Toast 줄)만 쓴다 — fill · swipe 가 읽은 화면을 다 쥐고 있지 않게
   const 읽음 = 움직임봄 ? [화면] : [];
-  let 바뀜 = 화면.글 !== 앞;
+  // 선택됨 · 포커스만 바뀐 것은 화면이 바뀐 것으로 안 본다 — 탭을 누르면 선택됨이 먼저 바뀌고 내용은 0.5초 뒤에 바뀐다(RN)
+  const 같다 = (a: string, b: string): boolean => 상태칸뺌(a) === 상태칸뺌(b);
+  let 바뀜 = !같다(화면.글, 앞);
   let 돈수 = 0;
   let 같았다 = false;
   let 가라앉음 = false;
@@ -97,7 +102,7 @@ export async function 화면을기다린다(c: 연결, sid: string, 앞?: string
   while (Date.now() < 끝) {
     await new Promise((r) => setTimeout(r, 가라앉기.간격_ms));
     const 다음 = await 읽어온다(c, sid);
-    const 같음 = 다음.글 === 화면.글;
+    const 같음 = 같다(다음.글, 화면.글);
     if (움직임봄) 읽음.push(다음);
     // 바뀐 뒤의 읽기만 센다 — 앞 화면 그대로인 읽기(RN 이 늦게 바꾸는 0.5초)는 움직임도 멈춤도 아니다
     if (바뀜) {
@@ -109,7 +114,7 @@ export async function 화면을기다린다(c: 연결, sid: string, 앞?: string
       가라앉음 = true;
       break;
     }
-    if (다음.글 !== 앞) 바뀜 = true;
+    if (!같다(다음.글, 앞)) 바뀜 = true;
   }
   // 바뀐 뒤 읽을 때마다 달랐다 = 끝까지 움직였다. 안 바뀐 화면 · 바뀐 뒤 같은 글을 두 번 본 화면은 움직임이 아니다 — 바뀐 뒤 세 번을 못 돌았으면 말하지 않는다
   if (!움직임봄) return 화면;
