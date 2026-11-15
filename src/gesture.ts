@@ -4,7 +4,7 @@ import { 가라앉기, 부른다, 화면을기다린다, type 연결 } from './a
 import { 잠깐뜬글 } from './crawl-motion.js';
 import type { 요소, 화면 } from './platform/android.js';
 
-const 쉰다 = (ms: number): Promise<void> => new Promise((ok) => setTimeout(ok, ms));
+export const 쉰다 = (ms: number): Promise<void> => new Promise((ok) => setTimeout(ok, ms));
 
 /** kit `길게누르기` 의 기본 누르는 시간과 같다 */
 export const 길게기본_ms = 1200;
@@ -43,10 +43,10 @@ export function 맞추기(선택자: string | undefined, 글: string | undefined
 }
 
 /** 화면을 되풀이해 읽어 맞음이 (사라짐이면 아니게) 될 때까지 기다린다. 걸린 ms 를 준다 — 시간 안에 안 되면 던진다 */
-export async function 기다린다(c: 연결, sid: string, 라벨: string, 맞음: (h: 화면) => boolean, 사라짐: boolean, 제한_ms: number): Promise<number> {
+export async function 기다린다(c: 연결, sid: string, 라벨: string, 맞음: (h: 화면) => boolean | Promise<boolean>, 사라짐: boolean, 제한_ms: number): Promise<number> {
   const 시작 = Date.now();
   for (;;) {
-    if (맞음(await 화면을기다린다(c, sid)) !== 사라짐) return Date.now() - 시작;
+    if ((await 맞음(await 화면을기다린다(c, sid))) !== 사라짐) return Date.now() - 시작;
     if (Date.now() - 시작 >= 제한_ms) throw new Error(`${라벨} — ${제한_ms / 1000}초 안에 ${사라짐 ? '사라지지 않았다' : '뜨지 않았다'}`);
     await 쉰다(가라앉기.간격_ms);
   }

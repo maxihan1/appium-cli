@@ -873,6 +873,7 @@ describe('crawl --login', () => {
     ['close\n', '1줄: close 은 못 쓴다'],
     ["# 주석\ntap e3\n", '2줄: ref 대신 선택자'],
     ['# 빈 스크립트\n', '로그인 스크립트가 비었다'],
+    ['tap android=new UiSelector().text("로그인")\n', '1줄: android= 선택자는 따옴표로 묶는다'],
   ])('스크립트 %j 는 Appium 을 부르기 전에 거절한다', async (글, 말) => {
     writeFileSync('login.txt', 글);
     fetchMock.mockClear();

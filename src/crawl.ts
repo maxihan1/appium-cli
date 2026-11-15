@@ -6,7 +6,7 @@ import { logcat을읽는다, 가라앉기, 띄우기, 부른다, 요소를찾는
 import { 줄더하기, 밀림표시, 처음줄들, 창글 } from './crawl-motion.js';
 import { 기록글, type 상태 } from './crawl-out.js';
 import { apiLines } from './logcat.js';
-import { center, locatorFor, w3c, type 요소, type 화면 } from './platform/android.js';
+import { center, locatorFor, w3c, 상태칸뺌, type 요소, type 화면 } from './platform/android.js';
 import { 로그인화면인가, 안누를까닭, 탈퇴말인가, 확인창, type 창결과 } from './press.js';
 
 const 화면누름상한 = 30; // 버튼이 수백 개인 화면 하나가 시간을 다 먹지 않게 (test_platform 과 같다)
@@ -15,10 +15,9 @@ const 다시로그인상한 = 3; // 누를 때마다 로그아웃되는 앱에�
 const 스크롤상한 = 5; // 화면 하나에서 목록을 위로 미는 수 — 끝없이 더 불러오는 목록이 시간을 다 먹지 않게
 const 스크롤걸음 = /^↓(\d+)$/; // path 안 스크롤 걸음 — 「본문 목록을 위로 n 번 민다」. 후보 이름이 아니다
 
-/** 구조 지문 — test_platform `지문`(authoring-crawl-rules.ts)과 같다. 따옴표 안 글자 · 숫자를 빼고 짜임만 본다 */
+/** 구조 지문 — test_platform `지문`(authoring-crawl-rules.ts)에 더해 선택됨 · 포커스 칸을 뺀다(상태칸뺌 — 그쪽 웹 화면 글에는 이 칸이 없다). 따옴표 안 글자 · 숫자를 빼고 짜임만 본다 */
 export function 지문(글: string): string {
-  const 정리 = 글
-    .replace(/"(?:[^"\\]|\\.)*"/g, '""')
+  const 정리 = 상태칸뺌(글.replace(/"(?:[^"\\]|\\.)*"/g, '""'))
     .replace(/\d+/g, '0')
     .replace(/[ \t]+/g, ' ');
   return createHash('sha1').update(정리).digest('hex').slice(0, 12);
