@@ -22,6 +22,8 @@ export interface 화면 {
   refs: Record<string, 요소>;
   width: number;
   height: number;
+  // 앞 화면 글을 받아 기다렸을 때만, 그리고 알릴 것이 있을 때만 단다 — 크롤이 화면 파일 머리 줄로 쓴다
+  기다림?: { 계속: boolean; 잠깐: string[] };
 }
 
 const 앱확장자 = new Set(['apk', 'apks', 'aab', 'xapk', 'zip']);

@@ -3,6 +3,7 @@
 import { mkdir, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { 잠깐뜬글 } from './crawl-motion.js';
 import { parseSource, type 화면 } from './platform/android.js';
 
 export interface 연결 {
@@ -85,16 +86,30 @@ async function 읽어온다(c: 연결, sid: string): Promise<화면> {
 export async function 화면을기다린다(c: 연결, sid: string, 앞?: string): Promise<화면> {
   let 화면 = await 읽어온다(c, sid);
   if (앞 === undefined) return 화면;
+  const 읽음 = [화면];
   let 바뀜 = 화면.글 !== 앞;
+  let 돈수 = 0;
+  let 같았다 = false;
+  let 가라앉음 = false;
   const 끝 = Date.now() + 가라앉기.최대_ms;
   while (Date.now() < 끝) {
     await new Promise((r) => setTimeout(r, 가라앉기.간격_ms));
     const 다음 = await 읽어온다(c, sid);
     const 같음 = 다음.글 === 화면.글;
+    읽음.push(다음);
+    돈수++;
+    같았다 ||= 같음;
     화면 = 다음;
-    if (바뀜 && 같음) break;
+    if (바뀜 && 같음) {
+      가라앉음 = true;
+      break;
+    }
     if (다음.글 !== 앞) 바뀜 = true;
   }
+  // 읽을 때마다 달랐다 = 끝까지 움직였다. 안 바뀌는 화면은 같은 글을 두 번 봤으니 움직임이 아니다 — 읽기가 느려 세 번을 못 돌았으면 말하지 않는다
+  const 계속 = !가라앉음 && !같았다 && 돈수 >= 3;
+  const 잠깐 = 잠깐뜬글(읽음, 앞, 계속);
+  if (계속 || 잠깐.length > 0) 화면.기다림 = { 계속, 잠깐 };
   return 화면;
 }
 

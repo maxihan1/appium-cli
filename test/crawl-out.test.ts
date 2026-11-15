@@ -2,7 +2,8 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { 견주기, 글자지문, 기록글, 저장본모양 } from '../src/crawl-out.js';
+import type { 크롤결과 } from '../src/crawl.js';
+import { 견주기, 결과파일들, 글자지문, 기록글, 저장본모양 } from '../src/crawl-out.js';
 import { parseSource } from '../src/platform/android.js';
 
 const 칸 = (속성: string): string => `<android.widget.EditText text="" content-desc="" resource-id="" clickable="true" enabled="true" bounds="[0,0][10,10]" ${속성} />`;
@@ -66,5 +67,23 @@ describe('견주기', () => {
       '로그아웃 new': { 저장본: '새 화면' },
     });
     expect(못본.map((x) => x.틀)).toEqual(['gone']);
+  });
+});
+
+describe('결과파일들 머리 줄', () => {
+  const 결과 = (움직임: string[]): 크롤결과 => ({
+    app: 'com.shop',
+    screens: [{ 상태: '로그아웃', key: 'app:.Main/a', name: 'Home', structFp: 'aaaaaaaaaaaa', path: [], record: '# app:.Main/a\n화면 1080x2400 · 요소 1개\n', 움직임, apis: [] }],
+    links: [], presses: 0, restarts: 0, 지름길: { 닿음: 0, 못닿음: 0 }, 다시로그인: 0, dialogs: {}, stopped: null, 상태들: ['로그아웃'],
+  });
+
+  it('머리 줄은 화면 파일 첫 줄 바로 뒤에만 끼우고 글자지문은 그대로다 — 같은 record 면 같은 지문', () => {
+    const 없음 = 결과파일들(결과([]), null, '2026-11-15');
+    const 있음 = 결과파일들(결과(['# 앱 밖: 버튼 「open web」 → com.android.chrome', '# 굴림: 목록 「이름 없음」']), null, '2026-11-15');
+
+    expect(없음.파일들.get('로그아웃/001.yml')).toBe('# app:.Main/a\n화면 1080x2400 · 요소 1개\n');
+    expect(있음.파일들.get('로그아웃/001.yml')).toBe('# app:.Main/a\n# 앱 밖: 버튼 「open web」 → com.android.chrome\n# 굴림: 목록 「이름 없음」\n화면 1080x2400 · 요소 1개\n');
+    expect(JSON.parse(있음.파일들.get('list.json')!)[0].글자지문).toBe(JSON.parse(없음.파일들.get('list.json')!)[0].글자지문);
+    expect(JSON.parse(있음.파일들.get('index.json')!).screens[0].움직임).toHaveLength(2);
   });
 });
