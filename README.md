@@ -21,6 +21,11 @@ npx appium-cli -s=probe open                   # 앱을 띄우고 첫 화면을 
 npx appium-cli -s=probe find --regex "/log ?in/i"
 npx appium-cli -s=probe tap e19                # Ran: await driver.$('~menu item log in').click()
 npx appium-cli -s=probe tap '~open menu'       # ref 대신 선택자도 된다 — 지금 화면에서 찾는다(앱이 뜨는 동안 10초까지 기다린다)
+npx appium-cli -s=probe long-press e19         # Ran: await 길게누르기(driver, '~…') — --ms 1000(기본) 만큼 길게
+npx appium-cli -s=probe double-tap '~item'     # Ran: await 두번누르기(driver.$('~item')) — 같은 자리를 짧게 두 번
+npx appium-cli -s=probe wait '~Saved'          # Ran: await 뜰때까지(driver, '~Saved') · Waited: 420ms · 새 화면 (--gone 이면 사라질때까지 · --timeout 10000 · 못 되면 종료 코드 1)
+npx appium-cli -s=probe wait --text '저장됨'     # 글자를 가진 요소 — Ran 줄은 없다
+npx appium-cli -s=probe tap e3 && npx appium-cli -s=probe toast   # Toast: 「저장됐어요」 — 누른 바로 뒤에 부른다, 못 봤으면 종료 코드 1 (--timeout 5000)
 npx appium-cli -s=probe fill e11 'bob@example.com'
 npx appium-cli -s=probe fill e12 '10203040' --submit   # 넣은 뒤 키보드 완료(mobile: performEditorAction done) — Ran 줄 둘
 npx appium-cli -s=probe hide-keyboard          # 키보드가 아래 버튼을 가리면 — Ran: await driver.hideKeyboard()
@@ -30,6 +35,8 @@ npx appium-cli -s=probe app clear              # Ran: mobile: clearApp — 앱 �
 npx appium-cli -s=probe close
 npx appium-cli release                         # 놓는다 — 팜이 깐 앱 · 앱 데이터를 지운다
 ```
+
+`tap` · `long-press` · `double-tap` 은 누른 뒤 기다리는 동안 Toast · 스낵바(`…/snackbar_text`)가 보이면 출력 끝에 `Toast: 「글」` 줄을 덧붙인다. 한 번에 놓치면 `toast` 로 다시 본다. `wait` 의 선택자는 `~desc` · `id=…` 만 받는다(ref 는 화면마다 바뀐다) — 꾸러미 없는 `id=login_id` 도 맞춘다.
 
 화면 한 줄이 요소 하나다. ref 는 마지막 화면에서만 유효하고, 액션마다 화면이 가라앉은 뒤 새로 찍힌다.
 

@@ -355,6 +355,140 @@ describe('그 밖의 명령', () => {
   });
 });
 
+describe('long-press · double-tap · wait · toast', () => {
+  const 토스트XML = 화면XML.replace(
+    '</hierarchy>',
+    '<android.widget.Toast index="3" text="저장됐어요" clickable="false" scrollable="false" bounds="[0,0][1,1]" resource-id="" content-desc="" /></hierarchy>',
+  );
+  const 소스를 = (xml: () => string): void => {
+    const 기본 = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) => (url.endsWith('/source') ? 답(xml()) : 기본(url, init)));
+  };
+  const 손가락동작 = (): { type: string; duration?: number; x?: number; y?: number }[] => {
+    const [, init] = (fetchMock.mock.calls as [string, RequestInit][]).find(([u]) => u.endsWith('/actions'))!;
+    return JSON.parse(init.body as string).actions[0].actions;
+  };
+
+  beforeEach(() => {
+    가라앉기.토스트더_ms = 0;
+  });
+
+  it('long-press 는 ref 가운데를 길게 누르고 길게누르기 코드와 새 화면을 준다 — --ms 로 길이를 바꾼다', async () => {
+    const out = await run(['-s=probe', 'long-press', 'e3'], env);
+
+    expect(부른길()).toEqual(['POST /session/s-1/actions', 'GET /session/s-1/source']);
+    expect(손가락동작()).toEqual([
+      { type: 'pointerMove', duration: 0, x: 20, y: 60 },
+      { type: 'pointerDown', button: 0 },
+      { type: 'pause', duration: 1000 },
+      { type: 'pointerUp', button: 0 },
+    ]);
+    expect(out.split('\n')[0]).toBe("Ran: await 길게누르기(driver, '~로그인 > 시작')");
+    expect(out.split('\n')[1]).toMatch(/^- Snapshot: /);
+
+    fetchMock.mockClear();
+    await run(['-s=probe', 'long-press', 'e3', '--ms', '2500'], env);
+    expect(손가락동작()[2]).toEqual({ type: 'pause', duration: 2500 });
+  });
+
+  it('long-press 는 선택자면 찾은 요소의 rect 가운데를 누르고, 주소 없는 ref 는 tap 처럼 좌표 주석을 준다', async () => {
+    const 기본 = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) => (url.endsWith('/rect') ? 답({ x: 100, y: 200, width: 50, height: 20 }) : 기본(url, init)));
+
+    const out = await run(['-s=probe', 'long-press', '~Login button'], env);
+
+    expect(부른길().filter((p) => !p.endsWith('/source'))).toEqual(['POST /session/s-1/element', 'GET /session/s-1/element/el-9/rect', 'POST /session/s-1/actions']);
+    expect(손가락동작()[0]).toMatchObject({ x: 125, y: 210 });
+    expect(out.split('\n')[0]).toBe("Ran: await 길게누르기(driver, '~Login button')");
+
+    const 좌표 = await run(['-s=probe', 'long-press', 'e2'], env);
+    expect(좌표.split('\n')[0]).toBe('Ran: // 주소 없음 — desc 도 id 도 없다. text= 로 찾지 않는다 (좌표 20,30 를 길게 눌렀다)');
+  });
+
+  it('long-press 는 못 찾는 선택자 · 없는 ref · 잘못된 --ms 에서 누르지 않고 던진다', async () => {
+    가라앉기.찾기_ms = 0;
+    const 기본 = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) => (url.endsWith('/element') ? 답({ error: 'no such element', message: 'none' }, 404) : 기본(url, init)));
+
+    await expect(run(['-s=probe', 'long-press', '~없는 버튼'], env)).rejects.toThrow('~없는 버튼 를 지금 화면에서 못 찾았다');
+    await expect(run(['-s=probe', 'long-press', 'e99'], env)).rejects.toThrow('ref e99 가 마지막 화면에 없다');
+    await expect(run(['-s=probe', 'long-press', 'e3', '--ms', '0'], env)).rejects.toThrow('--ms 은 1 이상의 정수');
+    expect(부른길().some((p) => p.endsWith('/actions'))).toBe(false);
+  });
+
+  it('double-tap 은 같은 자리를 짧게 두 번 누르고 두번누르기 코드를 준다', async () => {
+    const out = await run(['-s=probe', 'double-tap', 'e3'], env);
+
+    expect(손가락동작().filter((a) => a.type === 'pointerDown')).toHaveLength(2);
+    expect(손가락동작()[0]).toMatchObject({ x: 20, y: 60 });
+    expect(손가락동작().filter((a) => a.type === 'pause').every((a) => a.duration! <= 100)).toBe(true);
+    expect(out.split('\n')[0]).toBe("Ran: await 두번누르기(driver.$('~로그인 > 시작'))");
+  });
+
+  it('double-tap 은 없는 ref 에서 누르지 않고 던진다', async () => {
+    await expect(run(['-s=probe', 'double-tap', 'e99'], env)).rejects.toThrow('ref e99 가 마지막 화면에 없다');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('tap · long-press 는 누른 뒤 본 토스트를 끝에 Toast 줄로 덧붙이고, fill 은 안 덧붙인다', async () => {
+    소스를(() => 토스트XML);
+
+    expect((await run(['-s=probe', 'tap', 'e3'], env)).split('\n').slice(-1)).toEqual(['Toast: 「저장됐어요」']);
+    // 앞 화면에 이미 있던 토스트는 지난 것이라 안 덧붙인다 — 토스트 없는 화면을 한 번 읽고 다시 누른다
+    expect((await run(['-s=probe', 'long-press', 'e3'], env)).split('\n').slice(-1)[0]).toMatch(/^- Snapshot: /);
+    소스를(() => 화면XML);
+    await run(['-s=probe', 'snapshot'], env);
+    소스를(() => 토스트XML);
+    expect((await run(['-s=probe', 'long-press', 'e3'], env)).split('\n').slice(-1)).toEqual(['Toast: 「저장됐어요」']);
+    expect(await run(['-s=probe', 'fill', 'e4', 'x'], env)).not.toContain('Toast:');
+  });
+
+  it('wait 는 선택자가 뜰 때까지 화면을 다시 읽고, 걸린 ms · Ran 줄 · 새 화면을 준다', async () => {
+    const 차례 = ['<hierarchy width="1080" height="2400" />', '<hierarchy width="1080" height="2400" />'];
+    소스를(() => 차례.shift() ?? 화면XML);
+
+    const out = await run(['-s=probe', 'wait', '~로그인 > 시작'], env);
+
+    expect(부른길().filter((p) => p.endsWith('/source')).length).toBeGreaterThanOrEqual(4);
+    expect(out.split('\n')[0]).toBe("Ran: await 뜰때까지(driver, '~로그인 > 시작')");
+    expect(out.split('\n')[1]).toMatch(/^Waited: \d+ms$/);
+    expect(out.split('\n')[2]).toMatch(/^- Snapshot: /);
+  });
+
+  it('wait --text 는 Ran 줄 없이 글자를 가진 요소를 기다리고, id 는 꾸러미 없는 이름도 맞춘다', async () => {
+    const 글 = await run(['-s=probe', 'wait', '--text', 'Jerry'], env);
+    const 이름 = await run(['-s=probe', 'wait', 'id=pw'], env);
+
+    expect(글.split('\n')[0]).toMatch(/^Waited: \d+ms$/);
+    expect(이름.split('\n')[0]).toBe("Ran: await 뜰때까지(driver, 'id=pw')");
+  });
+
+  it('wait --gone 은 사라질 때까지 기다리고 사라짐 코드를 준다', async () => {
+    const out = await run(['-s=probe', 'wait', '~없는 버튼', '--gone'], env);
+
+    expect(out.split('\n')[0]).toBe("Ran: await 사라질때까지(driver, '~없는 버튼')");
+  });
+
+  it('wait 는 시간 안에 안 뜨거나 안 사라지면 까닭을 던지고 인자가 틀리면 Appium 을 안 부른다', async () => {
+    await expect(run(['-s=probe', 'wait', '~없는 버튼', '--timeout', '20'], env)).rejects.toThrow('~없는 버튼 — 0.02초 안에 뜨지 않았다');
+    await expect(run(['-s=probe', 'wait', '~로그인 > 시작', '--gone', '--timeout', '20'], env)).rejects.toThrow('0.02초 안에 사라지지 않았다');
+
+    fetchMock.mockClear();
+    await expect(run(['-s=probe', 'wait', 'e3'], env)).rejects.toThrow('ref 가 아니라 선택자');
+    await expect(run(['-s=probe', 'wait'], env)).rejects.toThrow('선택자');
+    await expect(run(['-s=probe', 'wait', '~a', '--text', 'b'], env)).rejects.toThrow('선택자');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('toast 는 본 토스트 글을 한 줄씩 내고, 하나도 못 보면 던진다', async () => {
+    소스를(() => 토스트XML);
+    expect(await run(['-s=probe', 'toast', '--timeout', '50'], env)).toBe('Toast: 「저장됐어요」');
+
+    소스를(() => 화면XML);
+    await expect(run(['-s=probe', 'toast', '--timeout', '20'], env)).rejects.toThrow('토스트를 못 봤다 — 누른 바로 뒤에 부른다');
+  });
+});
+
 describe('디바이스 팜', () => {
   const 주소들 = (): string[] => (fetchMock.mock.calls as [string, RequestInit][]).map(([u, i]) => `${i.method} ${u}`);
 

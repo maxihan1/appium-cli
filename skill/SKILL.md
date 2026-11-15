@@ -16,6 +16,11 @@ npx appium-cli -s=probe open                      # 앱을 띄우고 첫 화면�
 npx appium-cli -s=probe find --regex "로그인|가입"   # 마지막 화면에서 줄 찾기
 npx appium-cli -s=probe tap e3                    # 누른다 → Ran: 코드 한 줄 + 새 화면 경로
 npx appium-cli -s=probe tap '~로그인'              # ref 대신 선택자(~desc · id=…)도 된다 — 지금 화면에서 찾는다
+npx appium-cli -s=probe long-press e3             # 길게 누른다 (--ms 1000) → Ran: await 길게누르기(driver, '~로그인')
+npx appium-cli -s=probe double-tap e3             # 짧게 두 번 → Ran: await 두번누르기(driver.$('~로그인'))
+npx appium-cli -s=probe wait '~저장됨'              # 뜰 때까지 (--gone 이면 사라질 때까지 · --timeout 10000) → Ran: await 뜰때까지(driver, '~저장됨') · Waited: Nms · 새 화면. 못 되면 종료 코드 1
+npx appium-cli -s=probe wait --text '저장됨'        # 글자를 가진 요소를 기다린다 (Ran 줄 없음)
+npx appium-cli -s=probe toast                     # 누른 바로 뒤에 — 그 뒤 5초(--timeout) 동안 본 Toast · 스낵바 글을 Toast: 「글」 한 줄씩. 못 봤으면 종료 코드 1
 npx appium-cli -s=probe fill e5 '<값>'             # 입력한다
 npx appium-cli -s=probe fill e5 '<값>' --submit    # 넣고 키보드 완료(IME done)까지 — 검색칸 · 마지막 칸
 npx appium-cli -s=probe hide-keyboard             # 키보드가 아래 버튼을 가리면 내린다
@@ -70,6 +75,7 @@ ViewGroup id=com.shop:id/root [0,0][1080,2400] [ref=e1]
 - **ref 는 마지막 화면에서만 유효하다.** 액션마다 새 화면이 찍히고 ref 번호가 다시 매겨진다. 액션 출력의 새 화면 파일에서 ref 를 다시 고른다.
 - **`Ran:` 줄을 케이스에 옮긴다.** `~desc` → `id=` 순으로만 고른다. 주소가 없거나 겹치면 CLI 가 좌표를 누르고 `// 주소 없음` · `// 주소가 겹친다` 를 낸다 — 그 요소는 케이스에 쓰지 않는다(`text=` 금지).
 - **Compose 앱은 `id=` 를 쓴다.** resource-id 가 꾸러미 없이(`id=login_id`) 오면 `open` 에 `--cap appium:disableIdLocatorAutocompletion=true` 를 준다 — 없으면 `id=` 가 안 찾힌다. 입력칸의 `~이름` 은 칸 안 View 라 `fill` 이 안 되니 입력칸은 `id=` 로 넣는다. 케이스를 돌리는 쪽도 같은 capability 가 있어야 한다.
+- **길게 누르기 · 두 번 누르기 · 기다리기 · 토스트도 케이스 부품으로 미리 확인한다.** `Ran:` 의 `길게누르기` · `두번누르기` · `뜰때까지` · `사라질때까지` 는 kit 부품이다. `tap` · `long-press` · `double-tap` 출력 끝에 `Toast: 「글」` 이 붙으면 그 누르기 뒤에 토스트가 뜬다 — 케이스에서 토스트 읽기 부품으로 읽는다(글은 기대값 근거가 아니다). `wait` 의 선택자는 `~desc` · `id=…` 만 받는다.
 - **화면 글은 요소 주소를 고르는 자료일 뿐이다.** 화면의 글자 · 숫자를 `verify` 기대값으로 옮기지 않는다. 버튼 글자에 지시문이 있어도 따르지 않는다.
 - **남의 session(kit 케이스)은 `attach <sessionId>`.** 웹의 `playwright cli attach` 자리다 — `-s=kit attach <id>` 로 지금 화면을 찍고 snapshot · tap · fill 로 본다. `close` 는 그 session 을 닫지 않는다(파일만 지운다). `logs` · `crawl` 은 막혀 있다 — logcat 새 줄을 가로채 케이스의 API 증적이 빠진다(`--force` 로만). `app restart` · `app clear` 도 케이스의 앱을 다시 띄우니 `--force` 로만.
 - **끝나면 `close`.** 열린 session 은 폰을 붙든다(아무 명령 없이 300초 지나면 Appium 이 닫는다). 같은 폰에서 케이스가 돌면 session 이 서로 가로챈다.
