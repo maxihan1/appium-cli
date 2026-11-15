@@ -26,7 +26,7 @@ function 가짜(): void {
     const path = url.replace('http://farm:4723/wd/hub', '');
     if (path === '/session') return 답({ sessionId: 's-1', capabilities: {} });
     if (path.endsWith('/source')) return 답(화면XML);
-    if (path.endsWith('/element')) return 답({ 'element-6066-11e4-a5ab-c8d2b5b44a87': 'el-9' });
+    if (path.endsWith('/element')) return 답({ 'element-6066-11e4-a52e-4f735466cecf': 'el-9' });
     if (path.endsWith('/screenshot')) return 답(Buffer.from('png').toString('base64'));
     if (path.endsWith('/current_package')) return 답('com.shop');
     return 답(init.method === 'DELETE' ? null : {});
@@ -204,7 +204,7 @@ describe('tap', () => {
     fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
       if (!url.endsWith('/element/active')) return 기본(url, init);
       물음++;
-      return 물음 < 3 ? 답({ error: 'no such element', message: 'none' }, 404) : 답({ 'element-6066-11e4-a5ab-c8d2b5b44a87': 'el-7' });
+      return 물음 < 3 ? 답({ error: 'no such element', message: 'none' }, 404) : 답({ 'element-6066-11e4-a52e-4f735466cecf': 'el-7' });
     });
 
     const out = await run(['-s=probe', 'fill', 'e2', 'hi'], env);
@@ -665,6 +665,8 @@ describe('attach', () => {
   });
 
   it('끝난 session 이면 까닭을 내고 파일을 안 남긴다', async () => {
+    // 맥락 묻기도 · 화면 읽기도 끝난 session 이라 실패한다 — 맥락 실패는 네이티브로 보고 넘긴다
+    fetchMock.mockResolvedValueOnce(답({ error: 'invalid session id', message: 'gone' }, 404));
     fetchMock.mockResolvedValueOnce(답({ error: 'invalid session id', message: 'gone' }, 404));
 
     await expect(run(['-s=kit', 'attach', 'kit-7'], env)).rejects.toThrow('session kit-7 에 못 붙었다 — Appium 이 HTTP 404 로 답했다: gone — 이미 끝난 session 이다');
@@ -688,9 +690,9 @@ describe('attach', () => {
     await expect(run(['-s=kit', 'logs'], env)).rejects.toThrow('--force');
     await expect(run(['-s=kit', 'crawl'], env)).rejects.toThrow('앱도 다시 띄운다');
     expect(부른길()).toEqual([]);
-    fetchMock.mockResolvedValueOnce(답([]));
+    fetchMock.mockResolvedValueOnce(답('NATIVE_APP')).mockResolvedValueOnce(답([]));
     expect(await run(['-s=kit', 'logs', '--force'], env)).toBe('쌓인 줄 0개를 버렸다 — 다음 logs 부터 새 줄만 낸다');
-    expect(부른길()).toEqual(['POST /session/kit-7/se/log']);
+    expect(부른길()).toEqual(['GET /session/kit-7/context', 'POST /session/kit-7/se/log']);
   });
 });
 

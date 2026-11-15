@@ -8,29 +8,27 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { 가라앉기 } from '../src/appium.js';
 import { run } from '../src/cli.js';
-import { aria식, 웹w3c, 웹읽기, 태그글식 } from '../src/web.js';
+import { aria식, 웹w3c, 웹읽기, 웹주소글, 태그글식 } from '../src/web.js';
 
 import { 화면XML } from './fixture.js';
 
 const fetchMock = vi.fn();
 const env = { PLATFORM_APPIUM_URL: 'http://farm:4723/wd/hub', PLATFORM_APP: '/apk/dev.apk' };
 const 답 = (value: unknown, status = 200): Response => new Response(JSON.stringify({ value }), { status });
-const 요소 = (id: string): Record<string, string> => ({ 'element-6066-11e4-a5ab-c8d2b5b44a87': id });
+const 요소 = (id: string): Record<string, string> => ({ 'element-6066-11e4-a52e-4f735466cecf': id });
 const WEB = 'WEBVIEW_com.shop';
 
 let 맥락목록 = ['NATIVE_APP', WEB];
 let 지금맥락 = 'NATIVE_APP';
 let 찾은: Record<string, string>[] = [];
 let 보임 = true;
-const 웹줄 = [
-  { ref: 'w1', 글: 'button "구매" [ref=w1]', loc: '[data-testid="buy"]' },
-  { ref: 'w2', 글: 'link "자세히" [ref=w2]', loc: null },
-];
+let 웹줄 = ['button "구매" [ref=w1]', 'link "자세히" [ref=w2]'];
+const 주소들: Record<string, object> = { w1: { loc: '[data-testid="buy"]' }, w2: { loc: null } };
 
 function 가짜(): void {
   fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
     const path = url.replace('http://farm:4723/wd/hub', '');
-    const body = init.body === undefined ? undefined : (JSON.parse(String(init.body)) as { script?: string; name?: string });
+    const body = init.body === undefined ? undefined : (JSON.parse(String(init.body)) as { script?: string; name?: string; args?: string[] });
     if (path === '/session') return 답({ sessionId: 's-1', capabilities: { appPackage: 'com.shop' } });
     if (path.endsWith('/contexts')) return 답(맥락목록);
     if (path.endsWith('/context') && init.method === 'GET') return 답(지금맥락);
@@ -40,6 +38,7 @@ function 가짜(): void {
     }
     if (path.endsWith('/source')) return 답(화면XML);
     if (path.endsWith('/execute/sync') && body?.script === 웹읽기) return 답({ title: '상세', url: 'https://shop.test/order', 줄: 웹줄, 넘침: 0 });
+    if (path.endsWith('/execute/sync') && body?.script === 웹주소글) return 답(주소들[body.args![0]!] ?? { 없음: true });
     if (path.endsWith('/elements')) return 답(찾은);
     if (path.endsWith('/element')) return 답(요소('el-1'));
     const 표 = /\/element\/([\w-]+)\/attribute\/data-appium-cli-ref$/.exec(path);
@@ -59,6 +58,7 @@ beforeEach(async () => {
   지금맥락 = 'NATIVE_APP';
   찾은 = [];
   보임 = true;
+  웹줄 = ['button "구매" [ref=w1]', 'link "자세히" [ref=w2]'];
   fetchMock.mockReset();
   가짜();
   vi.stubGlobal('fetch', fetchMock);
@@ -145,6 +145,24 @@ describe('웹 맥락의 누르기 · 넣기 · 확인', () => {
     expect((await run(['-s=probe', 'count', 'aria/구매'], env)).split('\n').slice(0, 3)).toEqual(['Count: 2 — 겹친다. 하나만 맞아야 케이스에 쓴다', '- w1', '- 마지막 화면에 없는 요소']);
     expect(await run(['-s=probe', 'generate-locator', 'w1'], env)).toBe(`driver.$('[data-testid="buy"]')`);
     expect(await run(['-s=probe', 'generate-locator', 'w2'], env)).toMatch(/^주소 없음 — /);
+    await expect(run(['-s=probe', 'generate-locator', 'w9'], env)).rejects.toThrow('w9 가 지금 웹 화면에 없다 — 페이지가 다시 그려졌다');
+  });
+
+  it('누른 뒤 웹 화면은 앞 화면과 달라진 뒤 같은 글을 두 번 읽을 때까지 다시 읽고, 넘어가는 동안의 읽기 실패는 넘긴다', async () => {
+    Object.assign(가라앉기, { 최대_ms: 1000, 간격_ms: 0 });
+    let 번 = 0;
+    const 원래 = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
+      if (url.endsWith('/execute/sync') && String(init.body).includes('최대 = 300')) {
+        번++;
+        if (번 === 2) return 답({ error: 'javascript error', message: 'document unloaded' }, 500);
+        웹줄 = 번 <= 2 ? ['button "구매" [ref=w1]', 'link "자세히" [ref=w2]'] : ['heading "주문 완료" [ref=w1]'];
+      }
+      return 원래(url, init);
+    });
+    const 줄 = (await run(['-s=probe', 'tap', 'w1'], env)).split('\n');
+    expect(readFileSync(줄[1]!.replace('- Snapshot: ', ''), 'utf8')).toContain('heading "주문 완료"');
+    expect(번).toBe(4);
   });
 
   it('wait 은 선택자가 보일 때까지 · Ran 줄은 WebdriverIO waitForDisplayed — 글자 기다리기는 거절한다', async () => {
@@ -167,6 +185,7 @@ describe('웹 맥락의 누르기 · 넣기 · 확인', () => {
       await expect(run(['-s=probe', ...명령], env)).rejects.toThrow(`웹 맥락(${WEB})에서는 ${명령[0]} 을 못 쓴다`);
     }
     expect(fetchMock).not.toHaveBeenCalled();
+    await expect(run(['-s=probe', 'wait', 'w1'], env)).rejects.toThrow('wait 은 ref 가 아니라 선택자를 받는다');
   });
 });
 

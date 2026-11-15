@@ -17,7 +17,7 @@ import { 화면XML } from './fixture.js';
 const fetchMock = vi.fn();
 const env = { PLATFORM_APPIUM_URL: 'http://farm:4723/wd/hub', PLATFORM_APP: '/apk/dev.apk' };
 const 답 = (value: unknown, status = 200): Response => new Response(JSON.stringify({ value }), { status });
-const 요소 = (id: string): Record<string, string> => ({ 'element-6066-11e4-a5ab-c8d2b5b44a87': id });
+const 요소 = (id: string): Record<string, string> => ({ 'element-6066-11e4-a52e-4f735466cecf': id });
 
 // 테스트마다 바꾸는 폰 쪽 값
 let 찾은: Record<string, string>[] = [];

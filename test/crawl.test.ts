@@ -189,7 +189,7 @@ beforeEach(async () => {
     if (path.endsWith('/current_package')) return 답(위 === 'X' ? 'com.android.chrome' : 'com.shop');
     if (path.endsWith('/element')) {
       const i = 보임(위).findIndex((b) => (b.desc ?? b.id) === body.value);
-      return i < 0 ? new Response(JSON.stringify({ value: { error: 'no such element', message: 'none' } }), { status: 404 }) : 답({ 'element-6066-11e4-a5ab-c8d2b5b44a87': String(i) });
+      return i < 0 ? new Response(JSON.stringify({ value: { error: 'no such element', message: 'none' } }), { status: 404 }) : 답({ 'element-6066-11e4-a52e-4f735466cecf': String(i) });
     }
     const 넣은요소 = /\/element\/(\d+)\/value$/.exec(path);
     if (넣은요소) 입력[이름(보임(위)[Number(넣은요소[1])]!)] = String(body.text);

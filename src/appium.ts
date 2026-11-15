@@ -49,7 +49,8 @@ export async function 부른다(c: 연결, method: string, path: string, body?: 
   return 몸;
 }
 
-const ELEMENT = 'element-6066-11e4-a5ab-c8d2b5b44a87';
+// W3C 요소 열쇠. v0.7 까지 적던 열쇠(…-a5ab-c8d2b5b44a87)는 틀린 글자였다 — UiAutomator2 가 ELEMENT 도 같이 줘서 드러나지 않았다. 웹뷰(Chrome 드라이버)는 W3C 열쇠만 줄 수 있다
+const ELEMENT = 'element-6066-11e4-a52e-4f735466cecf';
 
 /** W3C 요소 답에서 번호를 꺼낸다 — 옛 JSONWP 꼴(ELEMENT)도 받는다 */
 export const 요소번호 = (v: Record<string, string>): string => v[ELEMENT] ?? v.ELEMENT!;

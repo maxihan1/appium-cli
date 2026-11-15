@@ -11,7 +11,7 @@ import { 결과파일들, 상태인가, 저장본모양 } from './crawl-out.js';
 import { 기다린다, 길게기본_ms, 길게누른다, 두번누른다, 맞추기, 양의정수, 토스트를본다, 토스트줄 } from './gesture.js';
 import { 굴려찾기선택자, 먼저뜬다, 보인다, 세어본다, 셈줄, 조회한다 } from './find.js';
 import { apiLines } from './logcat.js';
-import { ref로찾는다, 네이티브명령, 맥락들, 웹ref인가, 웹모두찾는다, 웹세어본다, 웹을읽는다, 웹이가라앉을때까지, 웹w3c, type 웹요소 } from './web.js';
+import { ref로찾는다, 네이티브명령, 맥락들, 웹ref인가, 웹모두찾는다, 웹세어본다, 웹을읽는다, 웹이가라앉을때까지, 웹주소, 웹w3c } from './web.js';
 import { capabilities, center, locatorFor, w3c, 패키지이름인가, type 요소 } from './platform/android.js';
 
 const 폴더 = '.appium-cli';
@@ -36,9 +36,8 @@ interface 세션 {
   붙음?: boolean;
   // open 이 띄운 앱 꾸러미 · activity · intent 인자 — app restart · clear · crawl --login 이 이것으로 다시 띄운다
   앱?: 띄운앱;
-  // context 로 바꾼 웹뷰 맥락 이름 — 없으면 네이티브. 웹 맥락의 화면 ref(wN)는 웹refs 에 둔다
+  // context 로 바꾼 웹뷰 맥락 이름 — 없으면 네이티브. 웹 화면의 ref(wN)는 페이지 요소에 단 표라 여기 두지 않는다
   맥락?: string;
-  웹refs?: Record<string, 웹요소>;
 }
 
 export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
@@ -194,17 +193,17 @@ const 적는다 = (파일: string, s: 세션): Promise<void> => writeFile(파일
 
 async function 찍는다(c: 연결, s: 세션, raw: boolean, 앞?: string, 토스트봄 = false): Promise<string> {
   if (s.맥락 !== undefined) {
-    const 웹 = 앞 === undefined ? await 웹을읽는다(c, s.sessionId, s.맥락) : await 웹이가라앉을때까지(c, s.sessionId, s.맥락, 가라앉기.최대_ms, 가라앉기.간격_ms);
+    const 웹 = 앞 === undefined ? await 웹을읽는다(c, s.sessionId, s.맥락) : await 웹이가라앉을때까지(c, s.sessionId, s.맥락, 앞, 가라앉기.최대_ms, 가라앉기.간격_ms);
     const 파일 = join(폴더, `web-${Date.now()}.txt`);
-    await writeFile(파일, 웹.글);
+    await writeFile(파일, 웹);
     // 네이티브 ref 는 웹 맥락에서 못 쓴다 — 비워서 eN 을 주면 「마지막 화면에 없다」가 나오게 한다
-    Object.assign(s, { snapshot: 파일, refs: {}, 웹refs: 웹.refs });
-    return raw ? 웹.글 : `- Snapshot: ${파일}`;
+    Object.assign(s, { snapshot: 파일, refs: {} });
+    return raw ? 웹 : `- Snapshot: ${파일}`;
   }
   const 화면 = await 화면을기다린다(c, s.sessionId, 앞, 토스트봄);
   const 파일 = join(폴더, `screen-${Date.now()}.txt`);
   await writeFile(파일, 화면.글);
-  Object.assign(s, { snapshot: 파일, refs: 화면.refs, width: 화면.width, height: 화면.height, 웹refs: undefined });
+  Object.assign(s, { snapshot: 파일, refs: 화면.refs, width: 화면.width, height: 화면.height });
   return [raw ? 화면.글 : `- Snapshot: ${파일}`, ...(화면.기다림?.잠깐 ?? []).map(토스트줄)].join('\n');
 }
 
@@ -249,23 +248,31 @@ function 웹인자(x: string | undefined): string {
   return x;
 }
 
-// 웹 맥락의 tap · fill · screenshot 대상 — ref 면 고른 선택자로, 선택자가 없는 ref 면 화면을 찍을 때 단 표로 찾는다
-async function 웹대상(c: 연결, s: 세션, x: string | undefined): Promise<{ id: string; loc: string | null; 까닭?: string }> {
+// 웹 맥락의 tap · fill · screenshot 대상 — ref 면 그때 고른 선택자로, 고를 것이 없는 ref 면 화면을 찍을 때 단 표로 찾는다
+async function 웹대상(c: 연결, sid: string, x: string | undefined): Promise<{ id: string; loc: string | null; 까닭?: string }> {
   const 인자 = 웹인자(x);
-  if (!웹ref인가(인자)) return { id: await 웹찾는다(c, s.sessionId, 인자), loc: 인자 };
-  const r = s.웹refs?.[인자];
-  if (r === undefined) throw new Error(`ref ${인자} 가 마지막 웹 화면에 없다 — snapshot 을 다시 찍고 거기 ref 를 쓴다`);
-  if (r.loc !== null) return { id: await 웹찾는다(c, s.sessionId, r.loc), loc: r.loc };
-  return { id: await ref로찾는다(c, s.sessionId, 인자), loc: null, ...(r.까닭 === undefined ? {} : { 까닭: r.까닭 }) };
+  if (!웹ref인가(인자)) return { id: await 웹찾는다(c, sid, 인자), loc: 인자 };
+  const r = await 웹주소(c, sid, 인자);
+  if (r.loc !== null) return { id: await 웹찾는다(c, sid, r.loc), loc: r.loc };
+  return { id: await ref로찾는다(c, sid, 인자), loc: null, ...(r.까닭 === undefined ? {} : { 까닭: r.까닭 }) };
 }
 
-async function 웹보인다(c: 연결, sid: string, 선택자: string): Promise<boolean> {
-  const [id] = await 웹모두찾는다(c, sid, 선택자);
-  if (id === undefined) return false;
-  return 부른다(c, 'GET', `/session/${sid}/element/${id}/displayed`).then(
+// 찾는 도중 페이지가 넘어가면 찾기가 실패한다 — 그때는 모름(undefined)으로 두고 기다리기가 다시 본다
+async function 웹보인다(c: 연결, sid: string, 선택자: string): Promise<boolean | undefined> {
+  const ids = await 웹모두찾는다(c, sid, 선택자).catch(() => undefined);
+  if (ids === undefined) return undefined;
+  if (ids[0] === undefined) return false;
+  return 부른다(c, 'GET', `/session/${sid}/element/${ids[0]}/displayed`).then(
     (v) => v === true,
     () => false,
   );
+}
+
+// 붙은 session 은 케이스가 웹뷰에서 구간을 드나드니 명령마다 지금 맥락을 다시 묻는다. 못 물으면 네이티브로 본다 — context 를 모르는 Appium 앞단에서도 붙게
+async function 맥락을맞춘다(c: 연결, s: 세션): Promise<void> {
+  const 지금 = await 부른다(c, 'GET', `/session/${s.sessionId}/context`).catch(() => 'NATIVE_APP');
+  if (typeof 지금 === 'string' && 지금 !== '' && 지금 !== 'NATIVE_APP') s.맥락 = 지금;
+  else delete s.맥락;
 }
 
 // 케이스에 옮겨 쓸 수 있는 선택자만 코드로 낸다. 없거나 겹치면 까닭을 적는다 (test_platform tpx-author/references/app.md §2)
@@ -403,9 +410,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
     let 찍음: string;
     try {
       // 케이스가 웹뷰에서 구간 안에 있으면 웹 맥락이다 — 네이티브 화면 글로 읽으면 HTML 이 온다
-      // 끝난 session 이면 여기서 던져 아래 까닭으로 간다
-      const 지금 = await 부른다(c, 'GET', `/session/${sid}/context`);
-      if (typeof 지금 === 'string' && 지금 !== '' && 지금 !== 'NATIVE_APP') s.맥락 = 지금;
+      await 맥락을맞춘다(c, s);
       찍음 = await 찍는다(c, s, false);
     } catch (e) {
       throw new Error(`session ${sid} 에 못 붙었다 — ${e instanceof Error ? e.message.replace(/ — session 이 끝났다.*$/, ' — 이미 끝난 session 이다') : String(e)}`);
@@ -443,6 +448,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
   }
   if (s.붙음 === true && 명령 === 'app' && values.force !== true) throw new Error('붙은 session 에서 app 을 하면 케이스가 쓰는 앱을 다시 띄운다(clear 는 데이터도 지운다) — 그래도 하려면 --force');
   if (s.붙음 === true && 명령 === 'settings' && 인자.length > 0 && values.force !== true) throw new Error('붙은 session 의 설정을 바꾸면 케이스가 바뀐 설정으로 돈다 — 그래도 하려면 --force');
+  if (s.붙음 === true && 명령 !== 'close') await 맥락을맞춘다(c, s);
   if (s.맥락 !== undefined && 네이티브명령.has(명령)) throw new Error(`웹 맥락(${s.맥락})에서는 ${명령} 을 못 쓴다 — context NATIVE_APP 으로 돌아가서 쓴다`);
 
   switch (명령) {
@@ -549,10 +555,13 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       if (s.맥락 !== undefined) {
         if (글 !== undefined) throw new Error("웹 맥락의 wait 은 선택자로 기다린다 — 글자는 'button=글' · 'aria/글' 꼴로 준다");
         const x = 웹인자(선택자);
+        if (웹ref인가(x)) throw new Error(`wait 은 ref 가 아니라 선택자를 받는다 — ${x} 의 선택자는 generate-locator ${x} 로 본다`);
         const 사라짐 = values.gone === true;
         const 제한 = 양의정수(values.timeout, 10_000, '--timeout');
         const 시작 = Date.now();
-        while ((await 웹보인다(c, sid, x)) === 사라짐) {
+        for (;;) {
+          const 보임 = await 웹보인다(c, sid, x);
+          if (보임 !== undefined && 보임 !== 사라짐) break;
           if (Date.now() - 시작 >= 제한) throw new Error(`${x} — ${제한 / 1000}초 안에 ${사라짐 ? '사라지지 않았다' : '뜨지 않았다'}`);
           await new Promise((ok) => setTimeout(ok, 가라앉기.간격_ms));
         }
@@ -612,7 +621,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       if (s.맥락 !== undefined) {
         const 선택자 = 웹인자(x);
         if (웹ref인가(선택자)) throw new Error('visible 은 선택자를 받는다');
-        return `Ran: await driver.$(${따옴표(선택자)}).isDisplayed()\nVisible: ${(await 웹보인다(c, sid, 선택자)) ? '예' : '아니오'}`;
+        return `Ran: await driver.$(${따옴표(선택자)}).isDisplayed()\nVisible: ${(await 웹보인다(c, sid, 선택자)) === true ? '예' : '아니오'}`;
       }
       if (!선택자인가(x)) throw new Error(`visible 은 선택자('~desc' · 'id=…' · 'android=…')를 받는다: ${x ?? '(없음)'}`);
       return `Ran: await 보이나(driver, ${따옴표(x)})\nVisible: ${(await 보인다(c, sid, x)) ? '예' : '아니오'}`;
@@ -637,8 +646,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       if (s.맥락 !== undefined) {
         const x = 웹인자(인자[0]);
         if (웹ref인가(x)) {
-          const r = s.웹refs?.[x];
-          if (r === undefined) throw new Error(`ref ${x} 가 마지막 웹 화면에 없다 — snapshot 을 다시 찍고 거기 ref 를 쓴다`);
+          const r = await 웹주소(c, sid, x);
           return r.loc === null ? (r.까닭 ?? '주소 없음') : `driver.$(${따옴표(r.loc)})`;
         }
         const 찍음 = await 찍는다(c, s, false);
@@ -684,7 +692,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       const x = 인자[0];
       let 경로 = `/session/${sid}/screenshot`;
       if (x !== undefined && s.맥락 !== undefined) {
-        경로 = `/session/${sid}/element/${(await 웹대상(c, s, x)).id}/screenshot`;
+        경로 = `/session/${sid}/element/${(await 웹대상(c, sid, x)).id}/screenshot`;
       } else if (x !== undefined) {
         const { loc, 막힘 } = 대상(s, x);
         if (막힘 !== null) throw new Error(`${x} 는 요소 사진을 못 찍는다 — ${막힘}. 인자 없이 화면 사진을 찍는다`);
@@ -718,7 +726,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
     case 'tap':
     case 'click': {
       if (s.맥락 !== undefined) {
-        const { id, loc, 까닭 } = await 웹대상(c, s, 인자[0]);
+        const { id, loc, 까닭 } = await 웹대상(c, sid, 인자[0]);
         await 부른다(c, 'POST', `/session/${sid}/element/${id}/click`, {});
         코드 = loc === null ? `// ${까닭 ?? '주소 없음'} (ref 로 눌렀다)` : `await driver.$(${따옴표(loc)}).click()`;
         break;
@@ -771,7 +779,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       if (s.맥락 !== undefined) {
         // 키보드 완료는 네이티브 명령이다 — 웹 케이스처럼 단추를 누른다
         if (values.submit === true) throw new Error('웹 맥락에서는 --submit 을 못 쓴다 — 보내기 단추를 tap 한다');
-        const { id, loc, 까닭 } = await 웹대상(c, s, 인자[0]);
+        const { id, loc, 까닭 } = await 웹대상(c, sid, 인자[0]);
         // WebdriverIO setValue 처럼 비우고 넣는다 — Ran 줄을 옮기면 같은 일이 일어나야 한다
         await 부른다(c, 'POST', `/session/${sid}/element/${id}/clear`, {});
         await 부른다(c, 'POST', `/session/${sid}/element/${id}/value`, { text: 값 });
