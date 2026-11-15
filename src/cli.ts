@@ -11,7 +11,7 @@ import { 결과파일들, 상태인가, 저장본모양 } from './crawl-out.js';
 import { 기다린다, 길게기본_ms, 길게누른다, 두번누른다, 맞추기, 양의정수, 토스트를본다, 토스트줄 } from './gesture.js';
 import { 굴려찾기선택자, 먼저뜬다, 보인다, 세어본다, 셈줄, 조회한다 } from './find.js';
 import { apiLines } from './logcat.js';
-import { 권한목록, 권한바꾼다, 권한이름, 권한창답, 앞앱줄 } from './system.js';
+import { 권한목록, 권한바꾼다, 권한이름, 권한창답, 권한창알림, 앞앱줄 } from './system.js';
 import { ref로찾는다, 네이티브명령, 맥락들, 웹ref인가, 웹모두찾는다, 웹세어본다, 웹을읽는다, 웹이가라앉을때까지, 웹주소, 웹w3c } from './web.js';
 import { capabilities, center, locatorFor, w3c, 패키지이름인가, type 요소 } from './platform/android.js';
 
@@ -454,7 +454,9 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
   if (s.붙음 === true && (명령 === 'logs' || 명령 === 'crawl') && values.force !== true) {
     throw new Error(`붙은 session 에서 ${명령} 를 하면 logcat 새 줄을 가로채 케이스 쪽에서 사라진다${명령 === 'crawl' ? ' (앱도 다시 띄운다)' : ''} — 그래도 하려면 --force`);
   }
-  if (s.붙음 === true && 명령 === 'app' && values.force !== true) throw new Error('붙은 session 에서 app 을 하면 케이스가 쓰는 앱을 다시 띄운다(clear 는 데이터도 지운다) — 그래도 하려면 --force');
+  if (s.붙음 === true && 명령 === 'notifications' && values.force !== true) throw new Error('붙은 session 에서 알림 창을 내리면 케이스가 쓰는 앱 위를 덮는다 — 그래도 하려면 --force');
+  // app front 는 붙은 session 의 꾸러미를 몰라 아래에서 따로 거절한다
+  if (s.붙음 === true && 명령 === 'app' && 인자[0] !== 'front' && values.force !== true) throw new Error('붙은 session 에서 app 을 하면 케이스가 쓰는 앱을 다시 띄운다(clear 는 데이터도 지운다) — 그래도 하려면 --force');
   if (s.붙음 === true && 명령 === 'settings' && 인자.length > 0 && values.force !== true) throw new Error('붙은 session 의 설정을 바꾸면 케이스가 바뀐 설정으로 돈다 — 그래도 하려면 --force');
   if (s.붙음 === true && 명령 !== 'close') await 맥락을맞춘다(c, s);
   if (s.맥락 !== undefined && 네이티브명령.has(명령)) throw new Error(`웹 맥락(${s.맥락})에서는 ${명령} 을 못 쓴다 — context NATIVE_APP 으로 돌아가서 쓴다`);
@@ -645,16 +647,18 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       if ((할일 !== 'grant' && 할일 !== 'revoke') || 이름들.length === 0) throw new Error('permission 은 인자 없이(보기) · grant <권한…> · revoke <권한…> 이다');
       const 줄까 = 할일 === 'grant';
       const 온이름 = [...new Set(이름들.map(권한이름))];
-      const { 앞, 되돌리기 } = await 권한바꾼다(c, sid, 꾸러미, 줄까, 온이름);
+      // 다시 띄울 길을 먼저 정한다 — 못 옮기는 intent 인자면 권한을 빼 앱을 끄기 전에 던진다(app restart 와 같다)
+      const 띄움 = 줄까 ? null : 띄우기(꾸러미, s.앱);
+      const { 앞, 되돌리기, 실패 } = await 권한바꾼다(c, sid, 꾸러미, 줄까, 온이름);
       const 줄 = [`Ran: // 케이스에서는 구간으로 쓴다 — await 권한상태에서(driver, { ${줄까 ? '준다' : '뺀다'}: [${온이름.map(따옴표).join(', ')}] }, async () => { … })`, ...앞];
       if (되돌리기 !== null) 줄.push(`- 탐색이 끝나면 되돌린다: ${되돌리기}`);
       // 준 권한을 빼면 Android 가 앱 프로세스를 끈다 — app restart 와 같은 길로 다시 띄운다
-      if (!줄까 && 되돌리기 !== null) {
-        const 띄움 = 띄우기(꾸러미, s.앱);
+      if (띄움 !== null && 되돌리기 !== null) {
         await 부른다(c, 'POST', `/session/${sid}/execute/sync`, { script: 띄움.script, args: [띄움.arg] });
         줄.push('- 권한을 빼서 꺼진 앱을 다시 띄웠다', await 찍는다(c, s, false));
         await 적는다(파일, s);
       }
+      if (실패 !== undefined) throw new Error([실패, ...줄.slice(1)].join('\n'));
       return 줄.join('\n');
     }
     case 'settings': {
@@ -766,7 +770,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
         await 부른다(c, 'POST', `/session/${sid}/element/${id}/click`, {});
         // 권한 창 단추는 케이스에서 kit 부품으로 답한다 — 기종마다 뜨는 단추(「앱 사용 중에만 허용」 등)가 달라 부품이 고른다
         const 답 = 권한창답(loc!);
-        코드 = 답 === undefined ? `await driver.$(${따옴표(loc!)}).click()` : `await 권한창답하기(driver, '${답}')`;
+        코드 = 답 === undefined ? `await driver.$(${따옴표(loc!)}).click()` : [`await 권한창답하기(driver, '${답}')`, 권한창알림(loc!)].filter((x) => x !== null).join('\n');
       } else {
         // 선택자로는 엉뚱한 요소가 눌릴 수 있어 그 ref 의 가운데를 누른다
         const p = center(el!.bounds);
