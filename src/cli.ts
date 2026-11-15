@@ -1048,7 +1048,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       const 꾸러미 = s.앱?.appPackage;
       const 파일 = s.앱?.app;
       if (꾸러미 === undefined) throw new Error('시험 대상 앱 꾸러미를 모른다 — open 으로 연 session 에서만 쓴다');
-      if (파일 === undefined) throw new Error('패키지 이름으로 연 스토어 앱은 지우지 않는다 — 팜이 「남길 앱」으로 둔 앱이다');
+      if (파일 === undefined) throw new Error('open 이 깐 앱 파일이 없다 — 패키지 이름으로 연 스토어 앱은 지우지 않는다(팜이 「남길 앱」으로 둔 앱이다). 앞 판에서 연 session 이면 다시 open 한다');
       const 실행 = (script: string, arg: Record<string, unknown>): Promise<unknown> => 부른다(c, 'POST', `/session/${sid}/execute/sync`, { script, args: [arg] });
       // kit 앱다시깔기 와 같은 요청
       await 실행('mobile: removeApp', { appId: 꾸러미 });
