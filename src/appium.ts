@@ -70,7 +70,8 @@ export async function logcat을읽는다(c: 연결, sid: string): Promise<string
 
 // 테스트가 줄일 수 있게 묶어 둔다. 찾기_ms 는 선택자로 찾을 때 — 앱 데이터를 지운 뒤 처음 뜨는 데 몇 초 걸린다
 // 산출물_ms 는 팜이 session 산출물(영상 · logcat)을 다 만들 때까지(ready:false) 기다리는 시간
-export const 가라앉기 = { 최대_ms: 3000, 간격_ms: 300, 찾기_ms: 10_000, 산출물_ms: 15_000, 산출물간격_ms: 1000 };
+// 토스트더_ms 는 toast 가 첫 토스트를 본 뒤 겹쳐 뜬 것을 더 보는 시간
+export const 가라앉기 = { 최대_ms: 3000, 간격_ms: 300, 찾기_ms: 10_000, 산출물_ms: 15_000, 산출물간격_ms: 1000, 토스트더_ms: 300 };
 
 async function 읽어온다(c: 연결, sid: string): Promise<화면> {
   const xml = await 부른다(c, 'GET', `/session/${sid}/source`);
@@ -86,7 +87,7 @@ async function 읽어온다(c: 연결, sid: string): Promise<화면> {
 export async function 화면을기다린다(c: 연결, sid: string, 앞?: string, 움직임봄 = false): Promise<화면> {
   let 화면 = await 읽어온다(c, sid);
   if (앞 === undefined) return 화면;
-  // 움직임은 crawl 만 쓴다 — tap · fill 이 읽은 화면을 다 쥐고 있지 않게
+  // 움직임은 crawl 과 누르기(tap · long-press · double-tap 의 Toast 줄)만 쓴다 — fill · swipe 가 읽은 화면을 다 쥐고 있지 않게
   const 읽음 = 움직임봄 ? [화면] : [];
   let 바뀜 = 화면.글 !== 앞;
   let 돈수 = 0;

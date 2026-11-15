@@ -8,6 +8,7 @@ import { parseArgs } from 'node:util';
 import { logcat을읽는다, 가라앉기, 띄우기, 산출물을받는다, 연결주소, 부른다, 요소를찾는다, 좌표를누른다, 화면을기다린다, type 띄운앱, type 연결 } from './appium.js';
 import { crawl, 본다 } from './crawl.js';
 import { 결과파일들, 상태인가, 저장본모양 } from './crawl-out.js';
+import { 기다린다, 길게기본_ms, 길게누른다, 두번누른다, 맞추기, 양의정수, 토스트를본다, 토스트줄 } from './gesture.js';
 import { apiLines } from './logcat.js';
 import { capabilities, center, locatorFor, w3c, 패키지이름인가, type 요소 } from './platform/android.js';
 
@@ -44,6 +45,13 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
   snapshot [--raw]                   화면을 파일로 떨군다 (--raw 면 글을 그대로)
   find <글자> | --regex <식>           마지막 화면에서 줄을 찾는다
   tap <ref|선택자>                     누른다 (click 도 같다). 선택자 '~desc' · 'id=…' 는 지금 화면에서 찾는다
+                                     tap · long-press · double-tap 은 누른 뒤 기다리는 동안 본 토스트를 끝에 Toast: 「글」 줄로 덧붙인다
+  long-press <ref|선택자> [--ms 1200]   요소를 길게 누른다 — 케이스와 같은 동작 (Ran: await 길게누르기(driver, '<선택자>'))
+  double-tap <ref|선택자>              같은 자리를 짧게 두 번 (Ran: await 두번누르기(driver.$('<선택자>')))
+  wait <선택자> | --text <글자> [--gone] [--timeout 10000]
+                                     그 요소(--text 면 그 글자를 가진 요소)가 뜰 때까지 (--gone 이면 사라질 때까지) 화면을 되풀이해 읽는다
+                                     뜨면 걸린 ms 와 새 화면 경로, 시간 안에 안 되면 까닭 한 줄과 종료 코드 1 (Ran: await 뜰때까지 · 사라질때까지(driver, '<선택자>'))
+  toast [--timeout 5000]             지금부터 그 시간 동안 화면을 읽어 Toast · 스낵바 글을 Toast: 「글」 한 줄씩 낸다 — 못 봤으면 종료 코드 1 (누른 바로 뒤에 부른다)
   fill <ref|선택자> <값> [--submit]     입력한다 (--submit 이면 넣은 뒤 키보드 완료(IME done)를 보낸다)
   hide-keyboard                      키보드를 내린다 (아래 버튼을 가릴 때)
   swipe up|down|left|right           손가락을 그 방향으로 민다
@@ -164,12 +172,12 @@ async function 읽는다(파일: string): Promise<세션> {
 
 const 적는다 = (파일: string, s: 세션): Promise<void> => writeFile(파일, JSON.stringify(s, null, 2));
 
-async function 찍는다(c: 연결, s: 세션, raw: boolean, 앞?: string): Promise<string> {
-  const 화면 = await 화면을기다린다(c, s.sessionId, 앞);
+async function 찍는다(c: 연결, s: 세션, raw: boolean, 앞?: string, 토스트봄 = false): Promise<string> {
+  const 화면 = await 화면을기다린다(c, s.sessionId, 앞, 토스트봄);
   const 파일 = join(폴더, `screen-${Date.now()}.txt`);
   await writeFile(파일, 화면.글);
   Object.assign(s, { snapshot: 파일, refs: 화면.refs, width: 화면.width, height: 화면.height });
-  return raw ? 화면.글 : `- Snapshot: ${파일}`;
+  return [raw ? 화면.글 : `- Snapshot: ${파일}`, ...(화면.기다림?.잠깐 ?? []).map(토스트줄)].join('\n');
 }
 
 function 고른다(s: 세션, ref: string | undefined): { el: 요소; loc: string | null; 겹침: number } {
@@ -238,6 +246,10 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       role: { type: 'string' },
       submit: { type: 'boolean' },
       force: { type: 'boolean' },
+      ms: { type: 'string' },
+      text: { type: 'string' },
+      gone: { type: 'boolean' },
+      timeout: { type: 'string' },
     },
   });
   const [명령, ...인자] = positionals;
@@ -447,6 +459,24 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       const { key, name } = (await 본다(c, sid)).정보;
       return name === '' ? key : `${key} · ${name}`;
     }
+    case 'wait': {
+      const 선택자 = 인자[0];
+      const 글 = values.text;
+      if ((선택자 === undefined) === (글 === undefined)) throw new Error("wait 에는 선택자('~desc' · 'id=…') 나 --text <글자> 중 하나가 필요하다");
+      if (선택자 !== undefined && !선택자인가(선택자)) throw new Error(`wait 은 ref 가 아니라 선택자('~desc' · 'id=…')를 받는다: ${선택자}`);
+      const 사라짐 = values.gone === true;
+      const 제한 = 양의정수(values.timeout, 10_000, '--timeout');
+      const ms = await 기다린다(c, sid, 선택자 ?? `--text ${JSON.stringify(글)}`, 맞추기(선택자, 글), 사라짐, 제한);
+      const 찍음 = await 찍는다(c, s, false);
+      await 적는다(파일, s);
+      const 코드 = 선택자 === undefined ? '' : `Ran: await ${사라짐 ? '사라질때까지' : '뜰때까지'}(driver, ${따옴표(선택자)}${제한 === 10_000 ? '' : `, ${제한}`})\n`;
+      return `${코드}Waited: ${ms}ms\n${찍음}`;
+    }
+    case 'toast': {
+      const 본 = await 토스트를본다(c, sid, 양의정수(values.timeout, 5000, '--timeout'));
+      if (본.length === 0) throw new Error('토스트를 못 봤다 — 누른 바로 뒤에 부른다');
+      return 본.map(토스트줄).join('\n');
+    }
     case 'generate-locator': {
       const { loc, 겹침 } = 고른다(s, 인자[0]);
       return 선택자글(loc, 겹침) ?? `driver.$(${따옴표(loc!)})`;
@@ -512,6 +542,34 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
         if (p === null) throw new Error(`${인자[0]} 의 위치를 모른다`);
         await 좌표를누른다(c, sid, p.x, p.y);
         코드 = `// ${막힘} (좌표 ${p.x},${p.y} 를 눌렀다)`;
+      }
+      break;
+    }
+    case 'long-press':
+    case 'double-tap': {
+      const 길게 = 명령 === 'long-press';
+      // 기본 시간은 kit `길게누르기` 와 같다. 한 요청이 60초에 끊겨 그보다 길게는 못 누른다
+      const ms = 길게 ? 양의정수(values.ms, 길게기본_ms, '--ms') : 0;
+      if (ms > 30_000) throw new Error(`--ms 은 30000 까지다: ${ms}`);
+      const { el, loc, 막힘 } = 대상(s, 인자[0]);
+      if (막힘 === null) {
+        // tap 처럼 선택자를 실제로 찾아 케이스와 같은 동작을 한다 — Ran 줄을 옮기면 같은 일이 일어나야 한다
+        const id = await 찾는다(c, sid, loc!);
+        if (길게) {
+          await 부른다(c, 'POST', `/session/${sid}/execute/sync`, { script: 'mobile: longClickGesture', args: [{ elementId: id, duration: ms }] });
+          코드 = `await 길게누르기(driver, ${따옴표(loc!)}${ms === 길게기본_ms ? '' : `, ${ms}`})`;
+        } else {
+          const 누름 = (): Promise<unknown> => 부른다(c, 'POST', `/session/${sid}/element/${id}/click`, {});
+          const 결과 = await Promise.allSettled([누름(), 누름()]);
+          const 실패 = 결과.filter((x): x is PromiseRejectedResult => x.status === 'rejected');
+          if (실패.length === 결과.length) throw 실패[0]!.reason;
+          코드 = `await 두번누르기(driver.$(${따옴표(loc!)}))`;
+        }
+      } else {
+        const p = center(el!.bounds);
+        if (p === null) throw new Error(`${인자[0]} 의 위치를 모른다`);
+        await (길게 ? 길게누른다(c, sid, p.x, p.y, ms) : 두번누른다(c, sid, p.x, p.y));
+        코드 = `// ${막힘} (좌표 ${p.x},${p.y} 를 ${길게 ? '길게' : '두 번'} 눌렀다)`;
       }
       break;
     }
@@ -587,7 +645,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
   }
 
   // playwright-cli 처럼 액션마다 새 화면을 찍는다 — 화면이 바뀌면 이전 ref 는 쓸 수 없다
-  const 찍음 = await 찍는다(c, s, false, 앞화면);
+  const 찍음 = await 찍는다(c, s, false, 앞화면, ['tap', 'click', 'long-press', 'double-tap'].includes(명령));
   await 적는다(파일, s);
   return `Ran: ${코드}\n${찍음}`;
 }
