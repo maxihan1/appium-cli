@@ -62,11 +62,13 @@ export const 밀방향인가 = (x: string | undefined): x is 밀방향 => (밀�
 export const 방향말: Record<밀방향, string> = { up: '위', down: '아래', left: '왼쪽', right: '오른쪽' };
 export const 방향으로: Record<밀방향, string> = { up: '위로', down: '아래로', left: '왼쪽으로', right: '오른쪽으로' };
 
-/** `[x1,y1][x2,y2]` 를 mobile: 손짓이 받는 상자로 */
+/** `[x1,y1][x2,y2]` 를 mobile: 손짓이 받는 상자로 — 주소 없는 ref 에서 손짓할 때만 쓴다 */
 export function 상자(bounds: string): { left: number; top: number; width: number; height: number } | null {
   const n = /\[(\d+),(\d+)\]\[(\d+),(\d+)\]/.exec(bounds)?.slice(1).map(Number);
   if (n === undefined || n[2]! <= n[0]! || n[3]! <= n[1]!) return null;
-  return { left: n[0]!, top: n[1]!, width: n[2]! - n[0]!, height: n[3]! - n[1]! };
+  // 가장자리 10% 는 뺀다 — 화면 폭만 한 요소의 끝에서 밀기 시작하면 제스처 내비게이션이 뒤로 가기로 읽는다(swipe 와 같은 여백)
+  const [w, h] = [n[2]! - n[0]!, n[3]! - n[1]!];
+  return { left: Math.round(n[0]! + w * 0.1), top: Math.round(n[1]! + h * 0.1), width: Math.round(w * 0.8), height: Math.round(h * 0.8) };
 }
 
 /** UiAutomator2 `mobile:` 손짓 하나 — kit 부품이 driver.execute 로 보내는 것과 같은 요청이다 */

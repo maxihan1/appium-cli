@@ -50,7 +50,7 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
   snapshot [--raw]                   화면을 파일로 떨군다 (--raw 면 글을 그대로)
   find <글자> | --regex <식>           마지막 화면에서 줄을 찾는다
   tap <ref|선택자>                     누른다 (click 도 같다). 선택자 '~desc' · 'id=…' · 'android=…'(부모 꼴 · 뜨는 창 꼴) 는 지금 화면에서 찾는다
-                                     tap · long-press · double-tap 은 누른 뒤 기다리는 동안 본 토스트를 끝에 Toast: 「글」 줄로 덧붙인다
+                                     tap · long-press · double-tap · tap-xy · 손동작(swipe-in · drag · pinch-…)은 누른 뒤 기다리는 동안 본 토스트를 끝에 Toast: 「글」 줄로 덧붙인다
   long-press <ref|선택자> [--ms 1200]   요소를 길게 누른다 — 케이스와 같은 동작 (Ran: await 길게누르기(driver, '<선택자>'))
   double-tap <ref|선택자>              같은 자리를 짧게 두 번 (Ran: await 두번누르기(await driver.$('<선택자>').getElement()))
   wait <선택자> | --text <글자> [--gone] [--timeout 10000]
@@ -842,7 +842,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
         // 하나라도 주소가 없으면 화면 글의 자리로 끈다 — 케이스에는 못 옮긴다
         const 점 = 둘.map((x, i) => {
           const p = x.el === null ? null : center(x.el.bounds);
-          if (p === null) throw new Error(`${인자[i]} 의 위치를 모른다 — 주소 없는 ref 와 함께 끌 때는 둘 다 ref 로 준다`);
+          if (p === null) throw new Error(x.el === null ? `${인자[i]} 는 선택자다 — 주소 없는 ref 와 함께 끌 때는 둘 다 ref 로 준다` : `${인자[i]} 의 위치를 모른다`);
           return p;
         });
         await 손짓(c, sid, 'mobile: dragGesture', { startX: 점[0]!.x, startY: 점[0]!.y, endX: 점[1]!.x, endY: 점[1]!.y });
@@ -868,8 +868,8 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
     }
     case 'tap-xy': {
       if (!/^\d+$/.test(인자[0] ?? '') || !/^\d+$/.test(인자[1] ?? '')) throw new Error('tap-xy 는 0 이상의 정수 좌표 둘이다 — tap-xy <x> <y>');
+      // 화면 밖인지는 폰이 가린다 — 마지막 화면 크기는 돌린 뒤라면 낡았다
       const [x, y] = [Number(인자[0]), Number(인자[1])];
-      if (s.width > 0 && (x >= s.width || y >= s.height)) throw new Error(`좌표 ${x},${y} 가 화면(${s.width}×${s.height}) 밖이다`);
       await 좌표를누른다(c, sid, x, y);
       코드 = `// 좌표 누르기는 케이스에 옮기지 않는다 — 요소가 없는 자리는 케이스에서 보류다 (좌표 ${x},${y} 를 눌렀다)`;
       break;
@@ -914,12 +914,9 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
     }
     case 'swipe': {
       const 방향 = 인자[0];
-      if (!['up', 'down', 'left', 'right'].includes(방향 ?? '')) throw new Error('swipe 방향은 up · down · left · right 다');
-      await 부른다(c, 'POST', `/session/${sid}/execute/sync`, {
-        script: 'mobile: swipeGesture',
-        args: [{ left: s.width * 0.1, top: s.height * 0.2, width: s.width * 0.8, height: s.height * 0.6, direction: 방향, percent: 0.75 }],
-      });
-      코드 = `await driver.swipe({ direction: ${따옴표(방향!)} })`;
+      if (!밀방향인가(방향)) throw new Error('swipe 방향은 up · down · left · right 다');
+      await 손짓(c, sid, 'mobile: swipeGesture', { left: s.width * 0.1, top: s.height * 0.2, width: s.width * 0.8, height: s.height * 0.6, direction: 방향, percent: 손동작정도 });
+      코드 = `await driver.swipe({ direction: ${따옴표(방향)} })`;
       break;
     }
     case 'hide-keyboard': {
@@ -982,7 +979,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
   }
 
   // playwright-cli 처럼 액션마다 새 화면을 찍는다 — 화면이 바뀌면 이전 ref 는 쓸 수 없다
-  const 찍음 = await 찍는다(c, s, false, 앞화면, ['tap', 'click', 'long-press', 'double-tap', 'tap-xy'].includes(명령));
+  const 찍음 = await 찍는다(c, s, false, 앞화면, ['tap', 'click', 'long-press', 'double-tap', 'tap-xy', 'swipe-in', 'drag', 'pinch-open', 'pinch-close'].includes(명령));
   await 적는다(파일, s);
   return `Ran: ${코드}\n${찍음}`;
 }
