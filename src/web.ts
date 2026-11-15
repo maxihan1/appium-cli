@@ -220,4 +220,4 @@ export async function 웹이가라앉을때까지(c: 연결, sid: string, 맥락
 }
 
 /** 웹 맥락에서 못 쓰는 명령 — 네이티브 화면 글 · UiAutomator2 손짓 · 키보드 · 앱 다시 띄우기 · 시스템 화면을 쓴다 */
-export const 네이티브명령 = new Set(['crawl', 'long-press', 'double-tap', 'wait-any', 'scroll-to', 'toast', 'swipe', 'hide-keyboard', 'app', 'attrs', 'screen', 'permission', 'notifications', 'swipe-in', 'drag', 'pinch-open', 'pinch-close', 'tap-xy', 'press', 'type', 'background', 'deeplink', 'screen-off-on', 'reinstall']);
+export const 네이티브명령 = new Set(['crawl', 'long-press', 'double-tap', 'wait-any', 'scroll-to', 'toast', 'swipe', 'hide-keyboard', 'app', 'attrs', 'screen', 'permission', 'notifications', 'swipe-in', 'drag', 'pinch-open', 'pinch-close', 'tap-xy', 'press', 'type', 'background', 'deeplink', 'screen-off-on', 'reinstall', 'phone']);
