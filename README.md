@@ -125,6 +125,7 @@ npx appium-cli -s=kit close                    # session kit 떼어냄 — <id> 
 
 ```bash
 npx appium-cli -s=probe crawl --max 50 --minutes 10   # → .appium-cli/crawl/list.json …
+npx appium-cli -s=probe crawl --max 0 --minutes 0   # 상한 없음 — 장수 · 시간으로 안 멈추고 화면당 상한(누름 30 · 밀기 5 · 다시 로그인 3)만으로 끝난다
 npx appium-cli -s=probe crawl --exclude '/설정|settings/i' --exclude 'com.shop:id/pay'   # 이름이 맞는 버튼은 안 누른다
 npx appium-cli -s=probe crawl --out ../data/crawl --keep ../data/kept/index.json   # 저장본과 같음 · 바뀜 · 새 화면
 ```
