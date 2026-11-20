@@ -136,7 +136,8 @@ export const 도움말 = `appium-cli [-s=<session>] <명령> [인자]
                                      (sessionId 가 없으면 이 이름으로 마지막에 close 한 session · 기본 .appium-cli/artifacts/<id>/)
   crawl [--max 50] [--minutes 10] [--exclude <식>] [--out <폴더>] [--keep <저장본>] [--login <스크립트> [--role <역할>]]
                                      지금 화면부터 눌러 가며 화면 파일 · list · index · links · apis · summary.json 을
-                                     --out(기본 .appium-cli/crawl)에 (--max 는 100 장까지). --keep 이면 저장본과 같음 · 바뀜 · 새 화면
+                                     --out(기본 .appium-cli/crawl)에. --keep 이면 저장본과 같음 · 바뀜 · 새 화면
+                                     --max 0 · --minutes 0 은 상한 없음 — 장수 · 시간으로 안 멈추고 아래 화면당 상한만으로 끝난다
                                      시작 때 --out 의 지난 결과(로그아웃/ · 로그인/ · 결과 json)만 지운다 (뿌리 · 홈 · 작업 폴더나 그 위는 거절)
                                      위험 글자(삭제 · 결제 …) · --exclude 에 맞는 이름은 안 누른다 (--exclude 는 여러 번)
                                      화면 후보를 다 누르면 목록(스크롤 요소)을 위로 밀어 새 후보도 누른다 (화면당 다섯 번 · 누름 30 번까지)
@@ -563,10 +564,11 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       return 줄.length === 0 ? '새 줄 없음' : 줄.join('\n');
     }
     case 'crawl': {
+      // 0 은 상한 없음 — 화면마다 누름 · 밀기 · 다시 로그인 상한만으로 끝난다(test_platform 앱 탐색은 앱 끝까지 훑는다)
       const 장 = Number(values.max ?? 50);
-      if (!Number.isInteger(장) || 장 < 1 || 장 > 100) throw new Error('--max 는 1 ~ 100 장이다');
+      if (!Number.isInteger(장) || 장 < 0) throw new Error('--max 는 0(상한 없음)이나 1 이상인 정수다');
       const 분 = Number(values.minutes ?? 10);
-      if (!(분 > 0)) throw new Error('--minutes 는 0 보다 큰 수다');
+      if (!(분 >= 0)) throw new Error('--minutes 는 0(상한 없음)이나 0 보다 큰 수다');
       const 뺄 = (values.exclude ?? []).map(정규식);
       const 꼴 = API꼴(values['api-pattern']);
       const 출력 = values.out ?? join(폴더, 'crawl');
@@ -587,7 +589,7 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
       };
       await 지난결과를지운다(출력);
       const 시작 = Date.now();
-      const r = await crawl(c, sid, { 장, 분 }, 뺄, 꼴, 로그인);
+      const r = await crawl(c, sid, { 장: 장 || Infinity, 분: 분 || Infinity }, 뺄, 꼴, 로그인);
       const { 파일들, 저장본, 목록수 } = 결과파일들(r, 저장, new Date().toISOString().slice(0, 10));
       for (const [경로, 글] of 파일들) {
         await mkdir(dirname(join(출력, 경로)), { recursive: true });

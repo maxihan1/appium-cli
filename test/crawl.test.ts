@@ -497,9 +497,29 @@ describe('crawl', () => {
     expect(결과().screens.map((s) => s.key)).toEqual(['app:.Main/a screen']);
   });
 
-  it('--max 는 1 ~ 100 장만 받는다', async () => {
+  it('--max 는 100 장을 넘어도 받는다', async () => {
+    const out = await run(['-s=c', 'crawl', '--max', '101'], env);
+
+    expect(out).toContain('멈춘 까닭 다 봄');
+    expect(결과().screens).toHaveLength(3);
+  });
+
+  it('--max 0 · --minutes 0 은 상한 없음이다 — 장수 · 시간으로 멈추지 않는다', async () => {
+    const out = await run(['-s=c', 'crawl', '--max', '0', '--minutes', '0'], env);
+
+    expect(out).toContain('멈춘 까닭 다 봄');
+    expect(결과().screens).toHaveLength(3);
+  });
+
+  it.each([
+    [['--max=-1'], '--max 는 0(상한 없음)이나 1 이상인 정수다'],
+    [['--max', '1.5'], '--max 는 0(상한 없음)이나 1 이상인 정수다'],
+    [['--max', '백'], '--max 는 0(상한 없음)이나 1 이상인 정수다'],
+    [['--minutes=-1'], '--minutes 는 0(상한 없음)이나 0 보다 큰 수다'],
+    [['--minutes', '십'], '--minutes 는 0(상한 없음)이나 0 보다 큰 수다'],
+  ])('%j 는 거절한다', async (인자, 말) => {
     fetchMock.mockClear();
-    await expect(run(['-s=c', 'crawl', '--max', '101'], env)).rejects.toThrow('--max 는 1 ~ 100 장이다');
+    await expect(run(['-s=c', 'crawl', ...인자], env)).rejects.toThrow(말);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
