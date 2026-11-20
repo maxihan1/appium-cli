@@ -565,9 +565,11 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv = process.env):
     }
     case 'crawl': {
       // 0 은 상한 없음 — 화면마다 누름 · 밀기 · 다시 로그인 상한만으로 끝난다(test_platform 앱 탐색은 앱 끝까지 훑는다)
-      const 장 = Number(values.max ?? 50);
+      // 빈 값(`--max "$없는변수"`)은 Number 가 0 으로 읽는다 — 상한 없음으로 새지 않게 거절한다
+      const 수 = (글: string | undefined, 기본: number): number => (글 === undefined ? 기본 : 글.trim() === '' ? NaN : Number(글));
+      const 장 = 수(values.max, 50);
       if (!Number.isInteger(장) || 장 < 0) throw new Error('--max 는 0(상한 없음)이나 1 이상인 정수다');
-      const 분 = Number(values.minutes ?? 10);
+      const 분 = 수(values.minutes, 10);
       if (!(분 >= 0)) throw new Error('--minutes 는 0(상한 없음)이나 0 보다 큰 수다');
       const 뺄 = (values.exclude ?? []).map(정규식);
       const 꼴 = API꼴(values['api-pattern']);
